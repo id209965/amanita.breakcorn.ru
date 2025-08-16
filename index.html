@@ -96,22 +96,125 @@ const videos = [ // Массив с видео-ссылками (YouTube и Vime
   // { type: 'yt', id: '' },
   // { type: 'yt', id: '' },
   // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // Vimeo
-  // { type: 'vi', id: '162736398' },
+  
+  // Vimeo для чередования с YouTube (помогает с очисткой памяти)
+  { type: 'vi', id: '162736398' }, // Nature documentary
+  { type: 'vi', id: '56282283' },  // Short film
+  { type: 'vi', id: '148751763' }, // Animation
+  { type: 'vi', id: '125095515' } // Art/Creative
 ];
 let currentIndex = 0; // Текущий индекс видео
 const container = document.getElementById('PLAYER');
-const player = new Plyr(container, { autoplay: true, controls: ['play', 'progress', 'mute', 'volume', 'fullscreen'] }); // Инициализируем Plyr
+let player = null;
+let videoChangeCount = 0;
+const MAX_VIDEOS_BEFORE_RECREATE = 5; // Пересоздаем плеер каждые 5 видео
+let memoryCheckInterval;
+let lastProvider = null; // Последний использованный провайдер
+const PREFER_PROVIDER_ALTERNATION = true; // Предпочитать чередование провайдеров
+
+// Мониторинг памяти
+function logMemoryUsage() {
+  if (performance.memory) {
+    const memory = performance.memory;
+    const used = Math.round(memory.usedJSHeapSize / 1024 / 1024);
+    const total = Math.round(memory.totalJSHeapSize / 1024 / 1024);
+    const limit = Math.round(memory.jsHeapSizeLimit / 1024 / 1024);
+    console.log(`Memory: ${used}MB / ${total}MB (limit: ${limit}MB) - Video: ${videoChangeCount}`);
+    
+    // Принудительное пересоздание при превышении лимита
+    if (used > limit * 0.8) {
+      console.warn('Memory usage high, forcing player recreation');
+      videoChangeCount = MAX_VIDEOS_BEFORE_RECREATE - 1; // Заставляем пересоздать на следующем видео
+    }
+  }
+}
+
+// Принудительная сборка мусора
+function forceGarbageCollection() {
+  if (window.gc) {
+    window.gc();
+    console.log('Manual garbage collection triggered');
+  }
+}
+
 function getRandomInt(max) {
   return Math.floor(Math.random() * max);
 }
+
+function createPlayer() {
+  return new Plyr(container, { 
+    autoplay: true, 
+    controls: ['play', 'progress', 'mute', 'volume', 'fullscreen']
+  });
+}
+
+function destroyPlayer() {
+  if (player) {
+    try {
+      // Отключаем все события
+      player.off('ended');
+      player.off('ready');
+      player.off('play');
+      player.off('pause');
+      player.destroy();
+    } catch (e) {
+      console.warn('Error destroying player:', e);
+    }
+    player = null;
+  }
+  
+  // Принудительная очистка iframe и всех вложенных элементов
+  const iframes = document.querySelectorAll('iframe');
+  iframes.forEach(iframe => {
+    try {
+      // Очищаем YouTube API
+      if (iframe.contentWindow && iframe.contentWindow.YT) {
+        iframe.contentWindow.YT = null;
+      }
+      iframe.src = 'about:blank';
+      iframe.parentNode && iframe.parentNode.removeChild(iframe);
+    } catch (e) {
+      console.warn('Error cleaning iframe:', e);
+    }
+  });
+  
+  // Полная очистка контейнера
+  container.innerHTML = '';
+  container.className = '';
+  
+  // Принудительная сборка мусора
+  forceGarbageCollection();
+  
+  // Пересоздаем базовый элемент
+  container.innerHTML = '<div data-plyr-provider="youtube" data-plyr-embed-id=""></div>';
+}
+
 function loadVideo(index) { // Функция для загрузки и воспроизведения следующего видео
   const video = videos[index];
+  videoChangeCount++;
+  
+  // Пересоздаем плеер периодически для очистки памяти
+  if (!player || videoChangeCount % MAX_VIDEOS_BEFORE_RECREATE === 0) {
+    console.log('Recreating player for memory cleanup...'); 
+    destroyPlayer();
+    
+    // Небольшая задержка для полной очистки
+    setTimeout(() => {
+      player = createPlayer();
+      setupPlayerEvents();
+      setVideoSource(video);
+    }, 100);
+    return;
+  }
+  
+  setVideoSource(video);
+}
+
+function setVideoSource(video) {
+  lastProvider = video.type; // Запоминаем текущий провайдер
+  
   if (video.type === 'yt') {
+    console.log(`Loading YouTube video: ${video.id}`);
     player.source = {
       type: 'video',
       sources: [{
@@ -120,6 +223,7 @@ function loadVideo(index) { // Функция для загрузки и вос�
       }],
     };
   } else if (video.type === 'vi') {
+    console.log(`Loading Vimeo video: ${video.id}`);
     player.source = {
       type: 'video',
       sources: [{
@@ -128,21 +232,43 @@ function loadVideo(index) { // Функция для загрузки и вос�
       }],
     };
   }
-  player.play(); // Автоматически начинаем воспроизведение
+  
+  setTimeout(() => {
+    player.play(); // Автоматически начинаем воспроизведение
+  }, 50);
 }
 
+function getNextVideoIndex() {
+  if (PREFER_PROVIDER_ALTERNATION && lastProvider) {
+    // Пытаемся найти видео с другим провайдером
+    const alternativeProviders = videos.filter(v => v.type !== lastProvider);
+    if (alternativeProviders.length > 0) {
+      const randomAlt = alternativeProviders[getRandomInt(alternativeProviders.length)];
+      return videos.indexOf(randomAlt);
+    }
+  }
+  
+  // Обычный случайный выбор
+  return getRandomInt(videos.length);
+}
+
+function setupPlayerEvents() {
+  player.on('ended', function () {
+    currentIndex = getNextVideoIndex();
+    loadVideo(currentIndex);
+  });
+
+  player.on('ready', function () {
+    player.play(); // Попробуем сразу запустить
+  });
+}
+
+// Инициализация
+player = createPlayer();
+setupPlayerEvents();
 loadVideo(currentIndex); // Загрузка первого видео
 
-player.on('ended', function () { // Переход на следующее видео по окончании текущего
-  // currentIndex++;
-  // if (currentIndex >= videos.length) {
-  //   currentIndex = 0; // Зацикливаем плейлист
-  // }
-  currentIndex = getRandomInt(videos.length)
-  loadVideo(currentIndex);
-});
-
-player.on('ready', function () { // Запуск плеера с первым видео по кнопке play (требуется для автозапуска в некоторых браузерах)
-  player.play(); // Попробуем сразу запустить
-});
+// Мониторинг памяти каждые 30 секунд
+memoryCheckInterval = setInterval(logMemoryUsage, 30000);
+logMemoryUsage(); // Первоначальные показатели
 </script></body></html>
