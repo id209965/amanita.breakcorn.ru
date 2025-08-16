@@ -110,7 +110,12 @@ let videoChangeCount = 0;
 const MAX_VIDEOS_BEFORE_RECREATE = 5; // Пересоздаем плеер каждые 5 видео
 let memoryCheckInterval;
 let lastProvider = null; // Последний использованный провайдер
-const PREFER_PROVIDER_ALTERNATION = true; // Предпочитать чередование провайдеров
+const PREFER_PROVIDER_ALTERNATION = false; // Отключено - не мешаем моноисточникам
+let consecutiveFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 3;
+let currentVideoTimeout = null;
+const VIDEO_LOAD_TIMEOUT = 15000; // 15 секунд на загрузку
+let isRecovering = false;
 
 // Мониторинг памяти
 function logMemoryUsage() {
@@ -213,55 +218,204 @@ function loadVideo(index) { // Функция для загрузки и вос�
 function setVideoSource(video) {
   lastProvider = video.type; // Запоминаем текущий провайдер
   
-  if (video.type === 'yt') {
-    console.log(`Loading YouTube video: ${video.id}`);
-    player.source = {
-      type: 'video',
-      sources: [{
-        src: video.id,
-        provider: 'youtube',
-      }],
-    };
-  } else if (video.type === 'vi') {
-    console.log(`Loading Vimeo video: ${video.id}`);
-    player.source = {
-      type: 'video',
-      sources: [{
-        src: video.id,
-        provider: 'vimeo',
-      }],
-    };
-  }
+  console.log(`Loading ${video.type === 'yt' ? 'YouTube' : 'Vimeo'} video: ${video.id} (failures: ${consecutiveFailures})`);
   
-  setTimeout(() => {
-    player.play(); // Автоматически начинаем воспроизведение
-  }, 50);
+  try {
+    if (video.type === 'yt') {
+      player.source = {
+        type: 'video',
+        sources: [{
+          src: video.id,
+          provider: 'youtube',
+        }],
+      };
+    } else if (video.type === 'vi') {
+      player.source = {
+        type: 'video',
+        sources: [{
+          src: video.id,
+          provider: 'vimeo',
+        }],
+      };
+    }
+    
+    // Запускаем таймаут на загрузку
+    startVideoTimeout();
+    
+    setTimeout(() => {
+      if (!isRecovering) {
+        player.play().catch(e => {
+          console.warn('Play failed:', e);
+          // Не считаем autoplay ошибкой
+        });
+      }
+    }, 100);
+    
+  } catch (error) {
+    console.error('Error setting video source:', error);
+    handleVideoFailure('source_error');
+  }
 }
 
 function getNextVideoIndex() {
-  if (PREFER_PROVIDER_ALTERNATION && lastProvider) {
-    // Пытаемся найти видео с другим провайдером
+  // При множественных ошибках подряд, пробуем другой провайдер
+  if (consecutiveFailures >= 2 && lastProvider) {
     const alternativeProviders = videos.filter(v => v.type !== lastProvider);
     if (alternativeProviders.length > 0) {
+      console.log('Multiple failures, trying different provider');
       const randomAlt = alternativeProviders[getRandomInt(alternativeProviders.length)];
       return videos.indexOf(randomAlt);
     }
   }
   
   // Обычный случайный выбор
-  return getRandomInt(videos.length);
+  let newIndex;
+  do {
+    newIndex = getRandomInt(videos.length);
+  } while (newIndex === currentIndex && videos.length > 1); // Не повторяем то же видео
+  
+  return newIndex;
+}
+
+function clearVideoTimeout() {
+  if (currentVideoTimeout) {
+    clearTimeout(currentVideoTimeout);
+    currentVideoTimeout = null;
+  }
+}
+
+function startVideoTimeout() {
+  clearVideoTimeout();
+  currentVideoTimeout = setTimeout(() => {
+    console.warn('Video load timeout, trying next video');
+    handleVideoFailure('timeout');
+  }, VIDEO_LOAD_TIMEOUT);
+}
+
+function handleVideoFailure(reason) {
+  if (isRecovering) return; // Предотвращаем рекурсию
+  
+  consecutiveFailures++;
+  console.error(`Video failure (${reason}). Consecutive failures: ${consecutiveFailures}`);
+  
+  clearVideoTimeout();
+  isRecovering = true;
+  
+  // При множественных ошибках - пересоздаем плеер
+  if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+    console.warn('Too many consecutive failures, forcing player recreation');
+    videoChangeCount = MAX_VIDEOS_BEFORE_RECREATE - 1; // Заставляем пересоздать
+    consecutiveFailures = 0;
+  }
+  
+  // Пробуем следующее видео через короткую задержку
+  setTimeout(() => {
+    currentIndex = getNextVideoIndex();
+    loadVideo(currentIndex);
+    isRecovering = false;
+  }, 2000);
+}
+
+function handleVideoSuccess() {
+  consecutiveFailures = 0; // Сбрасываем счетчик ошибок
+  clearVideoTimeout();
+  isRecovering = false;
 }
 
 function setupPlayerEvents() {
   player.on('ended', function () {
+    handleVideoSuccess();
     currentIndex = getNextVideoIndex();
     loadVideo(currentIndex);
   });
 
   player.on('ready', function () {
-    player.play(); // Попробуем сразу запустить
+    console.log('Player ready, starting playback');
+    handleVideoSuccess();
+    player.play().catch(e => {
+      console.warn('Autoplay failed:', e);
+      // Не считаем это ошибкой, тк autoplay может быть заблокирован
+    });
+  });
+  
+  player.on('error', function (e) {
+    console.error('Player error:', e);
+    handleVideoFailure('player_error');
+  });
+  
+  player.on('loadstart', function () {
+    console.log('Video loading started');
+    startVideoTimeout();
+  });
+  
+  player.on('canplay', function () {
+    console.log('Video can start playing');
+    clearVideoTimeout();
+  });
+  
+  player.on('playing', function () {
+    console.log('Video is playing');
+    handleVideoSuccess();
+  });
+  
+  player.on('stalled', function () {
+    console.warn('Video stalled');
+    // Не сразу считаем ошибкой, даем время
+    setTimeout(() => {
+      if (player.paused && !player.ended) {
+        console.warn('Video still stalled, considering as failure');
+        handleVideoFailure('stalled');
+      }
+    }, 10000);
   });
 }
+
+// Мануальное переключение (пробел или клик)
+function forceNextVideo() {
+  console.log('Manual skip triggered');
+  clearVideoTimeout();
+  consecutiveFailures = Math.max(0, consecutiveFailures - 1); // Не наказываем за мануальный пропуск
+  currentIndex = getNextVideoIndex();
+  loadVideo(currentIndex);
+}
+
+// Проверка здоровья каждые минуту
+function healthCheck() {
+  if (player && !isRecovering) {
+    const currentTime = player.currentTime;
+    const duration = player.duration;
+    
+    // Проверяем, не застряло ли видео
+    if (currentTime > 0 && currentTime === player._lastHealthCheckTime && !player.paused) {
+      console.warn('Video seems stuck, forcing next video');
+      handleVideoFailure('health_check_stuck');
+      return;
+    }
+    
+    player._lastHealthCheckTime = currentTime;
+    
+    // Логируем состояние
+    if (currentTime > 0 && duration > 0) {
+      const progress = Math.round((currentTime / duration) * 100);
+      console.log(`Playback health: ${progress}% (${Math.round(currentTime)}s/${Math.round(duration)}s)`);
+    }
+  }
+}
+
+// Обработчики клавиатуры
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'Space' || e.key === 'n' || e.key === 'N') {
+    e.preventDefault();
+    forceNextVideo();
+  }
+});
+
+// Клик по экрану для следующего видео (но не на контролы плеера)
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.plyr__controls')) {
+    forceNextVideo();
+  }
+});
 
 // Инициализация
 player = createPlayer();
@@ -271,4 +425,7 @@ loadVideo(currentIndex); // Загрузка первого видео
 // Мониторинг памяти каждые 30 секунд
 memoryCheckInterval = setInterval(logMemoryUsage, 30000);
 logMemoryUsage(); // Первоначальные показатели
+
+// Проверка здоровья каждую минуту
+setInterval(healthCheck, 60000);
 </script></body></html>
