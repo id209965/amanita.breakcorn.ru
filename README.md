@@ -24,9 +24,19 @@
 - `Watchdog: time=Xs, duration=Xs, paused=false/true` - каждые 3 секунды
 - `Video stuck at Xs - not starting` - обнаружено зависание
 - `Video never started! Triggering recovery...` - запуск автовосстановления
-- `Watchdog failure, forcing player recreation` - принудительное пересоздание
+- `Video disappeared but audio continues` - обнаружен postMessage проблема
+- `Caught postMessage error, ignoring` - перехваченная cross-origin ошибка
+- `Gentle/Forceful cleanup` - тип очистки iframe
 
-### Новое в 0.0.12+: Анти-зависание Watchdog система:
+### Новое в 0.0.13+: Защита от PostMessage ошибок:
+
+- **Перехват postMessage ошибок** - предотвращает краши от cross-origin конфликтов
+- **Мягкая очистка iframe** - сохраняет YouTube связь, принудительная только при критических ошибках
+- **Обнаружение пропавшего видео** - автоматическое восстановление когда видео исчезает, а звук остается
+- **Адаптивный watchdog** - учащает проверки до 1с при проблемах
+- **Безопасные обработчики** - все события обернуты в try-catch
+
+### Предыдущее в 0.0.12+: Анти-зависание Watchdog система:
 
 - **Обнаружение тихих зависаний** - watchdog отслеживает currentTime каждые 3 секунды
 - **Автоматическое восстановление** - переход к следующему видео через 9-12 секунд без прогресса
