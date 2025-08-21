@@ -32,3 +32,15 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Cypress and testing artifacts
+node_modules/
+package-lock.json
+cypress/videos/
+cypress/screenshots/
+cypress/reports/
+.nyc_output/
+coverage/
+
+# Generated Docker files
+Dockerfile.cypress.simple
