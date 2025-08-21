@@ -1,0 +1,205 @@
+name: Automated Tests
+
+on:
+  push:
+    branches: [ main, develop, sketch-wip ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: [3.9, 3.10, 3.11, 3.12]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          wget \
+          curl \
+          unzip \
+          xvfb \
+          chromium-browser \
+          chromium-chromedriver
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Start HTTP server for testing
+      run: |
+        python -m http.server 8000 &
+        echo "HTTP_SERVER_PID=$!" >> $GITHUB_ENV
+        sleep 5
+      
+    - name: Wait for server to start
+      run: |
+        timeout 30 bash -c 'until curl -f http://localhost:8000; do sleep 1; done'
+    
+    - name: Run unit tests
+      run: |
+        xvfb-run -a pytest tests/unit/ -v --tb=short
+      env:
+        BASE_URL: http://localhost:8000
+        CI: true
+    
+    - name: Run integration tests
+      run: |
+        xvfb-run -a pytest tests/integration/ -v --tb=short -x
+      env:
+        BASE_URL: http://localhost:8000
+        CI: true
+    
+    - name: Run performance tests
+      run: |
+        xvfb-run -a pytest tests/performance/ -v --tb=short -x
+      env:
+        BASE_URL: http://localhost:8000
+        CI: true
+    
+    - name: Generate test report
+      run: |
+        xvfb-run -a pytest --html=reports/test-report.html --self-contained-html --tb=short
+      env:
+        BASE_URL: http://localhost:8000
+        CI: true
+      if: always()
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-python-${{ matrix.python-version }}
+        path: |
+          reports/
+          logs/
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      if: matrix.python-version == '3.11'
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Stop HTTP server
+      if: always()
+      run: |
+        if [ ! -z "$HTTP_SERVER_PID" ]; then
+          kill $HTTP_SERVER_PID || true
+        fi
+
+  browser-compatibility:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    strategy:
+      matrix:
+        browser: [chrome, firefox]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        if [ "${{ matrix.browser }}" = "firefox" ]; then
+          sudo apt-get install -y firefox-esr
+          # Install geckodriver
+          wget -O /tmp/geckodriver.tar.gz https://github.com/mozilla/geckodriver/releases/download/v0.33.0/geckodriver-v0.33.0-linux64.tar.gz
+          tar -xzf /tmp/geckodriver.tar.gz -C /tmp/
+          sudo mv /tmp/geckodriver /usr/local/bin/
+          sudo chmod +x /usr/local/bin/geckodriver
+        else
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+        fi
+        sudo apt-get install -y xvfb
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        if [ "${{ matrix.browser }}" = "firefox" ]; then
+          pip install selenium[firefox]
+        fi
+    
+    - name: Start HTTP server
+      run: |
+        python -m http.server 8000 &
+        echo "HTTP_SERVER_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Run compatibility tests
+      run: |
+        xvfb-run -a pytest tests/unit/test_page_structure.py -v --tb=short
+      env:
+        BASE_URL: http://localhost:8000
+        CI: true
+        BROWSER: ${{ matrix.browser }}
+    
+    - name: Stop HTTP server
+      if: always()
+      run: |
+        if [ ! -z "$HTTP_SERVER_PID" ]; then
+          kill $HTTP_SERVER_PID || true
+        fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run security scan on dependencies
+      run: |
+        pip install safety
+        safety check -r requirements.txt --json --output security-report.json || true
+    
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-report
+        path: security-report.json
+
+  deploy-test-environment:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, browser-compatibility]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to test environment
+      run: |
+        echo "Deploying to test environment..."
+        # This would typically deploy to a staging server
+        # For now, we'll just create a deployment artifact
+        tar -czf deployment-package.tar.gz index.html *.sh version
+    
+    - name: Upload deployment package
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-package
+        path: deployment-package.tar.gz

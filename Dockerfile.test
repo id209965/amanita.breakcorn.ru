@@ -1,0 +1,40 @@
+# Dockerfile for running automated tests
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    unzip \
+    xvfb \
+    chromium \
+    chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy test files
+COPY tests/ tests/
+COPY pytest.ini .
+COPY run_tests.py .
+
+# Copy application files
+COPY index.html .
+COPY version .
+COPY *.sh ./
+
+# Set environment variables for testing
+ENV CI=true
+ENV BASE_URL=http://localhost:8000
+ENV PYTHONPATH=/app
+
+# Create reports directory
+RUN mkdir -p reports
+
+# Default command
+CMD ["python", "run_tests.py", "--headless", "--server", "-v"]

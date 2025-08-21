@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./reports:/app/reports
+      - ./screenshots:/app/screenshots
+    environment:
+      - CI=true
+      - BASE_URL=http://localhost:8000
+      - BROWSER=chrome
+    command: python run_tests.py --headless --server --coverage --html -v
+    
+  test-unit:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./reports:/app/reports
+    command: python run_tests.py --type unit --headless -v
+    
+  test-integration:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./reports:/app/reports
+      - ./screenshots:/app/screenshots
+    command: python run_tests.py --type integration --headless --server -v
+    
+  test-performance:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./reports:/app/reports
+    command: python run_tests.py --type performance --headless --server -v
+    
+  test-memory:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./reports:/app/reports
+    command: python run_tests.py --type memory --headless --server -v
