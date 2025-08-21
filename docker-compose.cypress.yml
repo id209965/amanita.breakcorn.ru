@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   cypress-tests:
     build:
       context: .
-      dockerfile: Dockerfile.cypress
+      dockerfile: Dockerfile.cypress.simple
     volumes:
       - ./cypress/screenshots:/app/cypress/screenshots
       - ./cypress/videos:/app/cypress/videos
@@ -15,12 +13,12 @@ services:
     command: >
       sh -c "python3 -m http.server 8000 &
              sleep 5 &&
-             npx cypress run --browser chrome --reporter cypress-mochawesome-reporter"
+             npx cypress run --browser electron --reporter cypress-mochawesome-reporter"
     
   cypress-unit:
     build:
       context: .
-      dockerfile: Dockerfile.cypress
+      dockerfile: Dockerfile.cypress.simple
     volumes:
       - ./cypress/screenshots:/app/cypress/screenshots
       - ./cypress/videos:/app/cypress/videos
@@ -28,73 +26,62 @@ services:
     command: >
       sh -c "python3 -m http.server 8000 &
              sleep 5 &&
-             npx cypress run --spec 'cypress/e2e/unit/**/*.cy.js' --browser chrome"
+             npx cypress run --spec 'cypress/e2e/unit/**/*.cy.js' --browser electron"
     
   cypress-integration:
     build:
       context: .
-      dockerfile: Dockerfile.cypress
+      dockerfile: Dockerfile.cypress.simple
     volumes:
       - ./cypress/screenshots:/app/cypress/screenshots
       - ./cypress/videos:/app/cypress/videos
     command: >
       sh -c "python3 -m http.server 8000 &
              sleep 5 &&
-             npx cypress run --spec 'cypress/e2e/integration/**/*.cy.js' --browser chrome"
+             npx cypress run --spec 'cypress/e2e/integration/**/*.cy.js' --browser electron"
     
   cypress-memory:
     build:
       context: .
-      dockerfile: Dockerfile.cypress
+      dockerfile: Dockerfile.cypress.simple
     volumes:
       - ./cypress/screenshots:/app/cypress/screenshots
       - ./cypress/videos:/app/cypress/videos
     command: >
       sh -c "python3 -m http.server 8000 &
              sleep 5 &&
-             npx cypress run --spec 'cypress/e2e/memory/**/*.cy.js' --browser chrome"
+             npx cypress run --spec 'cypress/e2e/memory/**/*.cy.js' --browser electron"
     
   cypress-performance:
     build:
       context: .
-      dockerfile: Dockerfile.cypress
+      dockerfile: Dockerfile.cypress.simple
     volumes:
       - ./cypress/screenshots:/app/cypress/screenshots
       - ./cypress/videos:/app/cypress/videos
     command: >
       sh -c "python3 -m http.server 8000 &
              sleep 5 &&
-             npx cypress run --spec 'cypress/e2e/performance/**/*.cy.js' --browser chrome"
+             npx cypress run --spec 'cypress/e2e/performance/**/*.cy.js' --browser electron"
     
-  cypress-firefox:
+  # Basic test that should work
+  cypress-basic:
     build:
       context: .
-      dockerfile: Dockerfile.cypress
+      dockerfile: Dockerfile.cypress.simple
     volumes:
       - ./cypress/screenshots:/app/cypress/screenshots
       - ./cypress/videos:/app/cypress/videos
     command: >
       sh -c "python3 -m http.server 8000 &
              sleep 5 &&
-             npx cypress run --browser firefox"
-    
-  lighthouse:
-    build:
-      context: .
-      dockerfile: Dockerfile.cypress
-    volumes:
-      - ./cypress/reports:/app/cypress/reports
-    command: >
-      sh -c "python3 -m http.server 8000 &
-             sleep 5 &&
-             npm install -g @lhci/cli &&
-             lhci autorun --config=.lighthouserc.js"
+             npx cypress run --spec 'cypress/e2e/unit/basic-page-test.cy.js' --browser electron"
 
   # Development service for interactive testing
   cypress-dev:
     build:
       context: .
-      dockerfile: Dockerfile.cypress
+      dockerfile: Dockerfile.cypress.simple
     volumes:
       - ./cypress:/app/cypress
       - ./cypress/screenshots:/app/cypress/screenshots

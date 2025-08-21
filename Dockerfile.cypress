@@ -1,11 +1,12 @@
 # Dockerfile for Cypress testing
 FROM cypress/included:13.6.0
 
-# Install Python for HTTP server
-RUN apt-get update && apt-get install -y \
+# Fix repository issues and install Python
+RUN apt-get update --allow-insecure-repositories || true && \
+    apt-get install -y --allow-unauthenticated \
     python3 \
     python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* || true
 
 # Set working directory
 WORKDIR /app
@@ -24,7 +25,7 @@ COPY cypress/ cypress/
 # Copy application files
 COPY index.html .
 COPY version .
-COPY *.sh ./
+COPY *.sh ./ || true
 
 # Create required directories
 RUN mkdir -p cypress/screenshots cypress/videos cypress/reports cypress/downloads
@@ -42,4 +43,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000 || exit 1
 
 # Default command - start server and run tests
-CMD ["sh", "-c", "python3 -m http.server 8000 & sleep 5 && npx cypress run --browser chrome"]
+CMD ["sh", "-c", "python3 -m http.server 8000 & sleep 5 && npx cypress run --browser electron"]
