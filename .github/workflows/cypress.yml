@@ -1,0 +1,215 @@
+name: Cypress E2E Tests
+
+on:
+  push:
+    branches: [ main, develop, sketch-wip ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  cypress-tests:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18, 20]
+        browser: [chrome, firefox]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Setup Python for HTTP server
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Install Cypress
+      run: npx cypress install
+    
+    - name: Start HTTP server
+      run: |
+        python -m http.server 8000 &
+        echo "HTTP_SERVER_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Wait for server
+      run: |
+        timeout 30 bash -c 'until curl -f http://localhost:8000; do sleep 1; done'
+    
+    - name: Run Cypress unit tests
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/unit/**/*.cy.js"
+      env:
+        CYPRESS_baseUrl: http://localhost:8000
+    
+    - name: Run Cypress integration tests  
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/integration/**/*.cy.js"
+      env:
+        CYPRESS_baseUrl: http://localhost:8000
+    
+    - name: Run Cypress memory tests
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/memory/**/*.cy.js"
+      env:
+        CYPRESS_baseUrl: http://localhost:8000
+    
+    - name: Run Cypress performance tests
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/performance/**/*.cy.js"
+      env:
+        CYPRESS_baseUrl: http://localhost:8000
+    
+    - name: Upload Cypress screenshots
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: cypress-screenshots-${{ matrix.node-version }}-${{ matrix.browser }}
+        path: cypress/screenshots
+        retention-days: 7
+    
+    - name: Upload Cypress videos
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: cypress-videos-${{ matrix.node-version }}-${{ matrix.browser }}
+        path: cypress/videos
+        retention-days: 7
+    
+    - name: Upload test reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: cypress-reports-${{ matrix.node-version }}-${{ matrix.browser }}
+        path: cypress/reports
+        retention-days: 14
+    
+    - name: Stop HTTP server
+      if: always()
+      run: |
+        if [ ! -z "$HTTP_SERVER_PID" ]; then
+          kill $HTTP_SERVER_PID || true
+        fi
+
+  lighthouse-performance:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Start HTTP server
+      run: |
+        python -m http.server 8000 &
+        echo "HTTP_SERVER_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Install Lighthouse CI
+      run: npm install -g @lhci/cli
+    
+    - name: Run Lighthouse CI
+      run: |
+        lhci autorun --config=.lighthouserc.js || echo "Lighthouse completed with warnings"
+      env:
+        LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+    
+    - name: Stop HTTP server
+      if: always()
+      run: |
+        if [ ! -z "$HTTP_SERVER_PID" ]; then
+          kill $HTTP_SERVER_PID || true
+        fi
+
+  cross-browser-compatibility:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Start HTTP server
+      run: |
+        python -m http.server 8000 &
+        echo "HTTP_SERVER_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Test Chrome
+      run: npx cypress run --browser chrome --spec "cypress/e2e/unit/page-structure.cy.js"
+      env:
+        CYPRESS_baseUrl: http://localhost:8000
+    
+    - name: Test Firefox
+      run: npx cypress run --browser firefox --spec "cypress/e2e/unit/page-structure.cy.js"
+      env:
+        CYPRESS_baseUrl: http://localhost:8000
+    
+    - name: Test Edge (if available)
+      run: npx cypress run --browser edge --spec "cypress/e2e/unit/page-structure.cy.js" || echo "Edge not available"
+      env:
+        CYPRESS_baseUrl: http://localhost:8000
+      continue-on-error: true
+    
+    - name: Stop HTTP server
+      if: always()
+      run: |
+        if [ ! -z "$HTTP_SERVER_PID" ]; then
+          kill $HTTP_SERVER_PID || true
+        fi
+
+  security-audit:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run security audit
+      run: |
+        npm audit --audit-level=moderate || echo "Security audit completed with warnings"
+    
+    - name: Upload audit results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-audit
+        path: npm-audit.json
+        retention-days: 7

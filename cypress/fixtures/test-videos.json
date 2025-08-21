@@ -1,0 +1,56 @@
+{
+  "youtube": [
+    {
+      "id": "dQw4w9WgXcQ",
+      "title": "Rick Astley - Never Gonna Give You Up",
+      "type": "yt",
+      "duration": 213,
+      "reliable": true,
+      "description": "Stable test video for testing"
+    },
+    {
+      "id": "tL6ZTcrDPAU",
+      "title": "Duke Ellington Caravan",
+      "type": "yt", 
+      "duration": 240,
+      "reliable": true,
+      "description": "Jazz music video for testing"
+    },
+    {
+      "id": "invalid123",
+      "title": "Invalid Video for Error Testing",
+      "type": "yt",
+      "duration": 0,
+      "reliable": false,
+      "description": "This video should fail to load for error testing"
+    }
+  ],
+  "vimeo": [
+    {
+      "id": "1234567",
+      "title": "Test Vimeo Video",
+      "type": "vimeo",
+      "duration": 120,
+      "reliable": false,
+      "description": "Vimeo test video - may need updating periodically"
+    }
+  ],
+  "constants": {
+    "MAX_VIDEOS_BEFORE_RECREATE": 5,
+    "MAX_CONSECUTIVE_FAILURES": 3,
+    "VIDEO_LOAD_TIMEOUT": 15000,
+    "WATCHDOG_CHECK_INTERVAL": 3000,
+    "MAX_STUCK_CHECKS": 3,
+    "MAX_ZERO_TIME_CHECKS": 4
+  },
+  "performance_thresholds": {
+    "page_load_max_ms": 30000,
+    "video_load_max_ms": 20000,
+    "transition_max_ms": 15000,
+    "max_transition_time_ms": 25000,
+    "max_initial_memory_mb": 100,
+    "max_memory_growth_mb": 20,
+    "max_watchdog_impact_mb": 5,
+    "max_heap_usage_percent": 50
+  }
+}

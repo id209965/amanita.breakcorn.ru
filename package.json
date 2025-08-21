@@ -1,0 +1,43 @@
+{
+  "name": "video-player-tests",
+  "version": "1.0.0",
+  "description": "Automated tests for video player with memory management",
+  "main": "index.js",
+  "scripts": {
+    "test": "cypress run",
+    "test:headed": "cypress run --headed",
+    "test:chrome": "cypress run --browser chrome",
+    "test:firefox": "cypress run --browser firefox",
+    "test:edge": "cypress run --browser edge",
+    "test:unit": "cypress run --spec 'cypress/e2e/unit/**/*.cy.js'",
+    "test:integration": "cypress run --spec 'cypress/e2e/integration/**/*.cy.js'",
+    "test:performance": "cypress run --spec 'cypress/e2e/performance/**/*.cy.js'",
+    "test:memory": "cypress run --spec 'cypress/e2e/memory/**/*.cy.js'",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "server": "python3 -m http.server 8000",
+    "test:local": "npm run server & cypress run --config baseUrl=http://localhost:8000",
+    "test:ci": "cypress run --browser chrome --headless --record false",
+    "install:cypress": "cypress install"
+  },
+  "devDependencies": {
+    "cypress": "^13.6.0",
+    "cypress-real-events": "^1.11.0",
+    "cypress-iframe": "^1.0.1",
+    "@cypress/code-coverage": "^3.12.0",
+    "cypress-mochawesome-reporter": "^3.8.0",
+    "mochawesome": "^7.1.3",
+    "mochawesome-merge": "^4.3.0",
+    "mochawesome-report-generator": "^6.2.0"
+  },
+  "dependencies": {},
+  "keywords": [
+    "cypress",
+    "testing",
+    "video-player",
+    "automation",
+    "memory-management"
+  ],
+  "author": "Video Player Tests",
+  "license": "MIT"
+}

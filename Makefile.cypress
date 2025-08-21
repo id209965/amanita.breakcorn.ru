@@ -1,0 +1,159 @@
+# Makefile for Cypress testing
+
+.PHONY: help install test test-unit test-integration test-performance test-memory test-all
+.PHONY: test-chrome test-firefox test-edge test-headed cypress-open server clean check-deps
+.PHONY: lighthouse-audit ci-test
+
+# Default target
+help:
+	@echo "Cypress Testing Commands:"
+	@echo ""
+	@echo "Setup:"
+	@echo "  install         - Install Node.js dependencies"
+	@echo "  server          - Start development server"
+	@echo ""
+	@echo "Testing:"
+	@echo "  test            - Run all Cypress tests"
+	@echo "  test-unit       - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  test-performance - Run performance tests only"
+	@echo "  test-memory     - Run memory management tests only"
+	@echo ""
+	@echo "Browser-specific:"
+	@echo "  test-chrome     - Run tests in Chrome"
+	@echo "  test-firefox    - Run tests in Firefox"
+	@echo "  test-edge       - Run tests in Edge"
+	@echo "  test-headed     - Run tests with visible browser"
+	@echo ""
+	@echo "Development:"
+	@echo "  cypress-open    - Open Cypress Test Runner (interactive)"
+	@echo "  lighthouse-audit - Run Lighthouse performance audit"
+	@echo "  ci-test         - Run tests in CI mode"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  clean           - Clean generated files"
+	@echo "  check-deps      - Check for dependency updates"
+
+# Installation
+install:
+	npm install
+	npx cypress install
+
+# Basic test targets
+test:
+	npm test
+
+test-unit:
+	npm run test:unit
+
+test-integration:
+	npm run test:integration
+
+test-performance:
+	npm run test:performance
+
+test-memory:
+	npm run test:memory
+
+test-all:
+	make test-unit test-integration test-memory test-performance
+
+# Browser-specific tests
+test-chrome:
+	npm run test:chrome
+
+test-firefox:
+	npm run test:firefox
+
+test-edge:
+	npm run test:edge
+
+test-headed:
+	npm run test:headed
+
+# Interactive mode
+cypress-open:
+	npm run cypress:open
+
+# Development server
+server:
+	npm run server
+
+server-bg:
+	npm run server &
+
+# CI testing
+ci-test:
+	npm run test:ci
+
+# Performance audit
+lighthouse-audit:
+	make server-bg
+	sleep 5
+	npx lhci autorun || echo "Lighthouse completed"
+	killall python3 || true
+
+# Quality checks
+check-deps:
+	npm audit
+	npm outdated || true
+
+# Cleanup
+clean:
+	rm -rf cypress/screenshots/
+	rm -rf cypress/videos/
+	rm -rf cypress/reports/
+	rm -rf cypress/downloads/
+	rm -rf node_modules/.cache/
+	find . -type f -name "*.log" -delete
+
+# Test with server
+test-with-server:
+	make server-bg
+	sleep 5
+	make test
+	killall python3 || true
+
+test-unit-with-server:
+	make server-bg
+	sleep 5
+	make test-unit
+	killall python3 || true
+
+test-integration-with-server:
+	make server-bg
+	sleep 5
+	make test-integration
+	killall python3 || true
+
+test-performance-with-server:
+	make server-bg
+	sleep 5
+	make test-performance
+	killall python3 || true
+
+test-memory-with-server:
+	make server-bg
+	sleep 5
+	make test-memory
+	killall python3 || true
+
+# Development workflow
+dev:
+	make server-bg
+	sleep 3
+	make cypress-open
+
+# Full test suite for release
+release-test:
+	make clean
+	make server-bg
+	sleep 5
+	make test-all
+	make lighthouse-audit
+	make check-deps
+	killall python3 || true
+
+# Watch mode for development
+watch:
+	ls cypress/e2e/**/*.cy.js | entr -c make test-unit

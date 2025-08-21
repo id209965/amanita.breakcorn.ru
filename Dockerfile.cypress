@@ -1,0 +1,45 @@
+# Dockerfile for Cypress testing
+FROM cypress/included:13.6.0
+
+# Install Python for HTTP server
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package*.json ./
+COPY cypress.config.js ./
+
+# Install dependencies
+RUN npm ci
+RUN npx cypress install
+
+# Copy Cypress files
+COPY cypress/ cypress/
+
+# Copy application files
+COPY index.html .
+COPY version .
+COPY *.sh ./
+
+# Create required directories
+RUN mkdir -p cypress/screenshots cypress/videos cypress/reports cypress/downloads
+
+# Set environment variables
+ENV CYPRESS_CACHE_FOLDER=/app/.cypress
+ENV CI=true
+ENV NODE_ENV=test
+
+# Expose port for HTTP server
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000 || exit 1
+
+# Default command - start server and run tests
+CMD ["sh", "-c", "python3 -m http.server 8000 & sleep 5 && npx cypress run --browser chrome"]
