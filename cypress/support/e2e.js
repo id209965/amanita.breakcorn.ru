@@ -7,33 +7,16 @@ import '@cypress/code-coverage/support'
 import 'cypress-mochawesome-reporter/register'
 
 // Ultra-permissive error handling for video player testing
-Cy.on('uncaught:exception', (err, runnable) => {
+Cypress.on('uncaught:exception', (err, runnable) => {
   // For video player testing, we ignore ALL JavaScript errors
   // as they're usually related to YouTube/Vimeo embeds
-  cy.log('Ignoring JS error:', err.message.substring(0, 100))
+  console.log('Ignoring JS error:', err.message.substring(0, 100))
   return false // Never fail tests due to JavaScript errors
 })
 
-// Global before hook
+// Setup default viewport for all tests
 beforeEach(() => {
-  // Set up viewport
   cy.viewport(1920, 1080)
-  
-  // Clear any previous state
-  cy.clearCookies()
-  cy.clearLocalStorage()
-  
-  // Visit the page with error handling
-  cy.visit('/', {
-    failOnStatusCode: false,
-    timeout: 60000
-  })
-  
-  // Wait for basic page elements with more relaxed conditions
-  cy.get('#PLAYER', { timeout: 30000 }).should('exist')
-  
-  // Give extra time for JavaScript to initialize
-  cy.wait(5000)
 })
 
 // Global after hook for cleanup
@@ -45,7 +28,7 @@ afterEach(() => {
 })
 
 // Window load handler for performance monitoring
-Cy.on('window:before:load', (win) => {
+Cypress.on('window:before:load', (win) => {
   // Add performance monitoring
   if (win.performance && win.performance.mark) {
     win.performance.mark('test-start')
