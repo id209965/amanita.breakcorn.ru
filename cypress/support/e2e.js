@@ -3,7 +3,7 @@ import './commands'
 
 // Import additional plugins
 import 'cypress-real-events'
-import '@cypress/code-coverage/support'
+// import '@cypress/code-coverage/support' // Disabled temporarily due to promise/cy.command conflicts
 import 'cypress-mochawesome-reporter/register'
 
 // Ultra-permissive error handling for video player testing

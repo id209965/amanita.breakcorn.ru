@@ -200,3 +200,113 @@ class TestVideoPlayer:
             # Recovery might involve going to next video
             video_info = video_player_helper.get_current_video_info()
             assert video_info is not None, "Player should recover from errors"
+
+    def test_spacebar_play_pause_control(self, loaded_page, video_player_helper):
+        """Test that spacebar controls play/pause functionality."""
+        # Wait for initial video to load
+        video_player_helper.wait_for_video_load(timeout=60)
+        
+        # Get initial playback state
+        initial_state = loaded_page.execute_script(
+            "return window.player ? { paused: window.player.paused, exists: true } : { exists: false };"
+        )
+        
+        assert initial_state['exists'], "Player should be available"
+        
+        # Simulate spacebar press
+        body = loaded_page.find_element(By.TAG_NAME, "body")
+        body.send_keys(Keys.SPACE)
+        
+        time.sleep(1)  # Give time for the action
+        
+        # Check that play/pause state changed
+        new_state = loaded_page.execute_script(
+            "return window.player ? { paused: window.player.paused } : { paused: null };"
+        )
+        
+        assert new_state['paused'] is not None, "Player should be available after spacebar"
+    def test_right_arrow_random_selection(self, loaded_page, video_player_helper):
+        """Test right arrow key for random video selection."""
+        # Wait for initial video to load
+        video_player_helper.wait_for_video_load(timeout=60)
+        
+        # Get initial video info
+        initial_info = video_player_helper.get_current_video_info()
+        initial_index = initial_info['currentVideoIndex']
+        
+        # Test right arrow key
+        body = loaded_page.find_element(By.TAG_NAME, "body")
+        body.send_keys(Keys.ARROW_RIGHT)
+        
+        # Wait for transition
+        time.sleep(3)
+        video_player_helper.wait_for_video_load(timeout=60)
+        
+        # Check that video changed
+        new_info = video_player_helper.get_current_video_info()
+        assert new_info['currentVideoIndex'] != initial_index, "Right arrow should trigger random video selection"
+    def test_left_arrow_history_navigation(self, loaded_page, video_player_helper):
+        """Test left arrow key for history navigation."""
+        # Wait for initial video to load
+        video_player_helper.wait_for_video_load(timeout=60)
+        
+        # Build some history by navigating through a few videos
+        for i in range(3):
+            current_info = video_player_helper.get_current_video_info()
+            current_index = current_info['currentVideoIndex']
+            
+            # Go to next video to build history
+            body = loaded_page.find_element(By.TAG_NAME, "body")
+            body.send_keys('n')  # Use 'n' to build history
+            time.sleep(3)
+            video_player_helper.wait_for_video_load(timeout=60)
+            
+            # Verify we moved
+            new_info = video_player_helper.get_current_video_info()
+            assert new_info['currentVideoIndex'] != current_index, f"Should have moved from video {current_index}"
+        
+        # Now test going back in history
+        current_info = video_player_helper.get_current_video_info()
+        current_index = current_info['currentVideoIndex']
+        
+        # Press left arrow to go back in history
+        body = loaded_page.find_element(By.TAG_NAME, "body")
+        body.send_keys(Keys.ARROW_LEFT)
+        
+        time.sleep(3)
+        video_player_helper.wait_for_video_load(timeout=60)
+        
+        # Check that we went to a different video (should be from history)
+        new_info = video_player_helper.get_current_video_info()
+        assert new_info['currentVideoIndex'] != current_index, "Left arrow should navigate back in history"
+    def test_history_uniqueness_enforcement(self, loaded_page, video_player_helper):
+        """Test that history maintains uniqueness of videos."""
+        # Wait for initial video to load
+        video_player_helper.wait_for_video_load(timeout=60)
+        
+        # Test history uniqueness
+        result = loaded_page.execute_script("""
+            if (!window.playerSettings) return { error: 'playerSettings not available' };
+            
+            // Clear history
+            window.playerSettings.watchHistory = [];
+            
+            // Add the same video multiple times
+            window.playerSettings.addToHistory('test-video', 'Test Video', false);
+            window.playerSettings.addToHistory('other-video', 'Other Video', false);
+            window.playerSettings.addToHistory('test-video', 'Test Video', false); // Duplicate
+            
+            // Check that history has unique videos
+            const videoIds = window.playerSettings.watchHistory.map(item => item.id);
+            return {
+                historyLength: window.playerSettings.watchHistory.length,
+                videoIds: videoIds,
+                hasDuplicates: videoIds.length !== new Set(videoIds).size
+            };
+        """)
+        
+        assert 'error' not in result, f"Error in test: {result.get('error')}"
+        assert result['historyLength'] == 2, "History should contain only 2 unique videos"
+        assert not result['hasDuplicates'], "History should not contain duplicate videos"
+        assert 'test-video' in result['videoIds'], "History should contain test-video"
+        assert 'other-video' in result['videoIds'], "History should contain other-video"

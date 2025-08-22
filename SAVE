@@ -5,9 +5,6 @@
 
 set -e
 
-git config --global user.name "breakcorn"
-git config --global user.email "breakcorny@gmail.com"
-
 IFS='.' read -r -a array <<< "$(cat version)"
 
 if git diff-index --quiet HEAD --; then

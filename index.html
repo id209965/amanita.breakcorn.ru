@@ -31,7 +31,27 @@
 </head>
 <body>
 
-<div id="PLAYER" data-plyr-provider="youtube" data-plyr-embed-id="rKyBID8kPWY"></div><!-- dQw4w9WgXcQ -->
+<div id="PLAYER" data-plyr-provider="youtube" data-plyr-embed-id="rKyBID8kPWY"></div>
+
+<!-- Autoplay Dialog -->
+<div id="autoplayDialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.9); color: white; padding: 30px; border-radius: 10px; text-align: center; z-index: 10000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);">
+  <h2 style="margin-top: 0; font-size: 24px;">🎬 Разрешить автовоспроизведение?</h2>
+  <p style="font-size: 16px; margin-bottom: 25px; opacity: 0.9;">Хотите, чтобы видео начинали воспроизводиться автоматически?</p>
+  <div style="display: flex; gap: 15px; justify-content: center;">
+    <button id="autoplayAllow" style="background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 5px; font-size: 16px; cursor: pointer;">✓ Да, включить</button>
+    <button id="autoplayDeny" style="background: #f44336; color: white; border: none; padding: 12px 24px; border-radius: 5px; font-size: 16px; cursor: pointer;">✗ Нет, спасибо</button>
+  </div>
+  <p style="font-size: 12px; margin-top: 20px; margin-bottom: 0; opacity: 0.7;">Выбор сохранится в браузере</p>
+</div>
+
+<!-- History Window -->
+<div id="historyWindow" style="position: fixed; top: 20px; right: 20px; width: 300px; max-height: 400px; background: rgba(0, 0, 0, 0.8); color: white; border-radius: 8px; padding: 15px; z-index: 9999; display: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+    <h3 style="margin: 0; font-size: 16px;">📺 История просмотра</h3>
+    <button id="toggleHistory" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">×</button>
+  </div>
+  <div id="historyContent" style="max-height: 320px; overflow-y: auto;"></div>
+</div>
 
 <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script><script>
 const videos = [ // Массив с видео-ссылками (YouTube и Vimeo)
@@ -85,33 +105,241 @@ const videos = [ // Массив с видео-ссылками (YouTube и Vime
   { type: 'yt', id: 'EbO_4oVE3pg' }, // Алиса в стране чудес. Все серии. Мультфильм по мотивам сказки Льюиса Кэрролла (1981)
   { type: 'yt', id: 'hMe2uS6m7EM' }, // Тайна третьей планеты (нейросеть Midjourney)
   { type: 'yt', id: 'xMQhq5LR1fk' }, // Жил Был Пес: История Создания ШЕДЕВРА Советской Анимации
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  // { type: 'yt', id: '' },
-  
-  // Vimeo для чередования с YouTube (помогает с очисткой памяти)
+  { type: 'yt', id: '3V1hACZ4Kpw' }, // Чиполлино Мультфильм СССР 1961 год HD
+  { type: 'yt', id: 'an6rIusqykQ' }, // Вовка в Тридевятом царстве (1965) (РЕСТАВРАЦИЯ любительская) | БУДУЩЕЕ
+  { type: 'yt', id: 'Cj-9wMiLREw' }, // Кот в сапогах (1968 год) мультфильм
+  { type: 'yt', id: 'BqNJr7rTqfs' }, // Заколдованный мальчик (1955) Мультфильм Владимира Полковникова
+  { type: 'yt', id: '0wnr46rSquo' }, // Рикки-Тикки-Тави (Rikki-Tikki-Tavi) 1965 — Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'W5K_W2buGMw' }, // Cказка о рыбаке и рыбке (1950) — Советские мультфильмы — Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'aARGO2yeTZQ' }, // Сказка о мёртвой царевне и семи богатырях (1951) - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'D3QGqprYx_s' }, // Аленький цветочек (Alenkiy cvetochek) 1952 — Советские мультфильмы — Золотая коллекция СССР
+  { type: 'yt', id: 'gswytJq4U0c' }, // Ночь перед Рождеством (Noch' pered rozhdestvom) 1951 - Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: '7qZe0dJksgY' }, // Царевна-лягушка (Carevna-lyagushka) 1954 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: '54SR1ha0FmA' }, // Снежная королева (Snejnaya koroleva) 1957 - Советские мультфильмы - Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'oQQ7eGY2TRw' }, // Сказка о царе Салтане (Skazka o care Saltane) 1984 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'zLqyLN-fRwU' }, // Конёк-Горбунок (Konyok-gorbunok) 1975 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'uKrPCue0xQY' }, // Храбрый оленёнок (Hrabriy olenenok) 1957 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'qHe46Ry69rQ' }, // Золотая антилопа (Zolotaya antilopa) 1954 - Советские мультфильмы - Золотая коллекция Soyuzmultfilm
+  { type: 'yt', id: 'oBYb_MDGTWg' }, // Сказка Двенадцать месяцев (Dvenadtsat mesyatsev) - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: '6Fe1W0C6e8M' }, // Сказка о мертвой царевне и семи богатырях (1951) - Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'tmw6PsB9JAQ' }, // Каштанка (Kashtanka) 1952 — Советские мультфильмы — Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'ccJdU-zIQrw' }, // Чудо-мельница (Chudo-melnica) 1950 — Советские мультфильмы — Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: '6-gqMviIMA' }, // Зайчонок, который не хотел спать (1975 год) мультфильм
+  { type: 'yt', id: 'bJqIEUwP-Fc' }, // Лягушка — путешественница (1995) мультфильм
+  { type: 'yt', id: '1SMM8IKsYPk' }, // Приключения Васи Куролесова (1981) Мультфильм Владимира Попова
+  { type: 'yt', id: 'JBGFJFQbjKY' }, // Самоделкин в космосе (1971 год) мультфильм
+  { type: 'yt', id: 'ODWoFDeTKhg' }, // Русалочка (Rusalochka) 1968 — Советские мультфильмы — Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'IXnnL0EJuJ8' }, // Одуванчик — толстые щеки (1971 год) мультфильм
+  { type: 'yt', id: 'vD_L0tiG2YQ' }, // Вася и динозавр (1971 год) мультфильм
+  { type: 'yt', id: 'yWbFsYTW4e4' }, // Каникулы Бонифация (Kanikuly Bonifaciya) - Советские мультфильмы - Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'FYlBONkp6Xo' }, // Ну, погоди! - Все Выпуски (Nu Pogodi cartoon)
+  { type: 'yt', id: 'Y3FEZJz55T0' }, // The Pink Panther in "In the Pink of the Night"
+  { type: 'yt', id: '7y4WhR3W2Nc' }, // The Pink Panther in "Psychedelic Pink"
+  { type: 'yt', id: 'WnLcZFHlC80' }, // Pink Panther | Bad Boi | Episode Compilation
+  { type: 'yt', id: 'P2W2rahR-cI' }, // Pink Panther | Sleepy Time/Daylight Savings | Episode Compilation
+  { type: 'yt', id: 'D446i98PXOM' }, // Про полосатого слоненка (1971 год) мультфильм
+  { type: 'yt', id: '5_H9XAKMP9o' }, // Плюх и Плих. Мультфильм по юмористическому стихотворению в переводе Даниила Хармса (1984)
+  { type: 'yt', id: 'JLpZIy9iTjk' }, // Даниил Хармс Стихи для детей
+  { type: 'yt', id: 'G4_mvrNwqPo' }, // Дюймовочка (Duymovochka) 1964 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'rz0upt_pfKo' }, // Пёс в сапогах (Pes v sapogah) 1981 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'zGMF4zs-GJY' }, // Верните Рекса (Vernite Reksa) 1975 - Советские мультфильмы Союзмультфильм - Золотая коллекция СССР
+  { type: 'yt', id: 'kgyd4WA7Sdw' }, // Кентервильское привидение (1970) - Советские мультфильмы - Золотая коллекция Союзмультфильм
+  { type: 'yt', id: 'MK3P0DhF2Ig' }, // Золушка (Zolushka) 1979 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'Ex3-JhFr4rk' }, // Золушка мультфильм для детей | серия 1 | Золушка мультик | смотреть онлайн | сказка для детей
+  { type: 'yt', id: '3cdKSn3nwwY' }, // Непобедимые Скайеры
+  // https://www.youtube.com/playlist?list=PLwsbmUWsb12yJPnmeK9LWhJ1g1zuBdC4R
+  { type: 'yt', id: 'yumi8Pab7oI' }, // Непобедимые Скайеры 1 season - 13 Terror Toons
+  { type: 'yt', id: 'oUBwNWsLORE' }, // Непобедимые Скайеры 1 season - 12 Killer Ants
+  { type: 'yt', id: 'k7ujomlRuE8' }, // Непобедимые Скайеры 1 season - 11 Life Force
+  { type: 'yt', id: '9H4o80XI9NY' }, // Непобедимые Скайеры 1 season - 10 The Dogs of Doom
+  { type: 'yt', id: 'aqwC9GiZ0DI' }, // Непобедимые Скайеры 1 season - 9 The Ancient City
+  { type: 'yt', id: 'DVgsvi-FLUw' }, // Непобедимые Скайеры 1 season - 8 Voodoo Master
+  { type: 'yt', id: 'n1hb-nU0css' }, // Непобедимые Скайеры 1 season - 7 Mountain of Fear
+  { type: 'yt', id: 'TYS7egU3gk0' }, // Непобедимые Скайеры 1 season - 6 Time Storm
+  { type: 'yt', id: 'b8O5naNzDeo' }, // Непобедимые Скайеры 1 season - 5 Titan of Terror
+  { type: 'yt', id: 'AtJ3E1H001w' }, // Непобедимые Скайеры 1 season - 4 Death Paint
+  { type: 'yt', id: 'Hbd2fq5Vytk' }, // Непобедимые Скайеры 1 season - 3 Cyber magic
+  { type: 'yt', id: 'LFLNuSMylYU' }, // Непобедимые Скайеры 1 season - 2 Alien Attack
+  { type: 'yt', id: 'E1CBYDZUg6Q' }, // Непобедимые Скайеры 1 season - 1 City of Terror
+  { type: 'yt', id: 'ROfYRGQeIsc' }, // The Immortals - Mortal Kombat 1995 - 1997
+  { type: 'yt', id: 'ueNY30Cs8Lk' }, // Betsy, Мария Янковская – Sigma Boy (Official Music Video)
+  { type: 'yt', id: 'RHCLycZ4huk' }, // Мария Янковская, POLI - Sigma Girl (Official music video)
+  { type: 'yt', id: 'g_noUxsk2rU' }, // POLI - Котик (Official music video)
+  { type: 'yt', id: '92KQz3Rq25c' }, // Super Mario Bros HD: World 9
+  { type: 'yt', id: 'pwPB6_g3sq4' }, // Battletoads - Official Release Date Trailer
+  { type: 'yt', id: 'J_XQa4cU0L8' }, // Liu Kang, Kitana vs Smoke | Mortal Kombat: Annihilation (1997)
+  { type: 'yt', id: 'Ksl_TmC9XNU' }, // Smoke - Fight Scenes (Mortal Kombat Legends)
+  { type: 'yt', id: 'Uc3y1iNKM1Y' }, // Sektor - Fight Scenes (Mortal Kombat Legends)
+  { type: 'yt', id: '7DYs4ZR3DlE' }, // Kabal - Powers & Fight Scenes (Mortal Kombat Legends)
+  { type: 'yt', id: 'BHNf-1XDwyw' }, // Sonya Blade - Fight Scenes (Mortal Kombat Legends)
+  { type: 'yt', id: 'TC3F1uTY1T4' }, // Sonya Blade - All Fight Scenes | Mortal Kombat 2021
+  { type: 'yt', id: '2Y-QY5Uf_Xs' }, // Sub-Zero - Powers & Fight Scenes (Mortal Kombat Legends)
+  { type: 'yt', id: '7W-XvNwp2O8' }, // Batman vs Shredder | Batman vs Teenage Mutant Ninja Turtles
+  { type: 'yt', id: 'PZp2-5fGtmc' }, // Спидран: Матрица I за 60 секунд
+  { type: 'yt', id: '03N1jCsPBnE' }, // Спидран: Назад в будущее I за 60 секунд
+  { type: 'yt', id: 'eK_ucKmnoJk' }, // Спидран: Звездные войны IV за 60 секунд
+  { type: 'yt', id: 'TuAdBToEFJs' }, // Goro - Fight Scenes (Mortal Kombat Legends)
+  { type: 'yt', id: 'QbbhwhIjrHo' }, // Batman Finally Kills Joker | Batman: The Dark Knight Returns Part 2
+  { type: 'yt', id: 'mE5ujgx35QY' }, // Batman VS Joker Part 1 - The Dark Knight Returns Part 2 2012
+  { type: 'yt', id: '6XaT_YfWYFE' }, // Batman vs Joker | Batman: Mask of the Phantasm
+  { type: 'yt', id: '0cqRo5uNFo8' }, // Gotham City Sirens! | The Batman | @dckids
+  { type: 'yt', id: 'O4BGNaMAQPQ' }, // 🐶🦴 BEST of Krypto The Superdog! | #KidsCartoons | @dckids
+  { type: 'yt', id: 'YCsitFjK7PY' }, // Cards Wars | Adventure Time | Cartoon Network
+  { type: 'yt', id: 'iDrTQNYrKM4' }, // Даниил Хармс "Врун". Аня и Лена Шамины
+  { type: 'yt', id: 'AP_1jbSi9rw' }, // Adventure Time | The Limit | Cartoon Network
+  { type: 'yt', id: 'b0QV21Nm0xE' }, // Adventure Time | Lady Rainicorn Slaying Life! | Cartoon Network
+  { type: 'yt', id: '7ERD6LENGUc' }, // Маша делает большого Лизуна - Песенки Маши
+  { type: 'yt', id: 'vnshxp9cGak' }, // Угадай, кто спрятался в яйце - Песенки Маши (Детские песни/Песни для детей)
+  { type: 'yt', id: '0Yh4EkWPnUY' }, // Phonics Song with TWO Words in 3D - A For Apple - ABC Alphabet Songs with Sounds for Children - 70
+  { type: 'yt', id: 'qJBl11d82lA' }, // Синий трактор представляет ! Почтальон ! Песенки мультики для детей малышей
+  { type: 'yt', id: 'lHlv3yYOvA8' }, // Песня Дюдюки Барбидокской из мультфильма "Подарок для слона" (1984)
+  { type: 'yt', id: 'u2GU094DxOo' }, // Песенки Маши - Кнопка желаний (Детские песни/Песни для детей)
+  { type: 'yt', id: 'kylHp-edauE' }, // Волшебная шляпа - Песенки Маши (Детские песни/песни для детей)
+  { type: 'yt', id: '2C34o8dmYV4' }, // Маша в космосе, путешествует по разным планетам - песенки Маши (Детские песни/песни для детей)
+  { type: 'yt', id: 'X3xNJSpOgWk' }, // По следам Бременских музыкантов (Po sledam Bremenskih muzykantov) - Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'J9jf8_Ww2QA' }, // Летучий Корабль (Letuchiy korabl) 1979 - Советские мультфильмы - Золотая коллекция СССР
+  { type: 'yt', id: 'kV8zgacFmn4' }, // Путешествие по вашему телу
+  { type: 'yt', id: 'UXqrbNK0fTE' }, // 가젤이 치타에게 쫓기고 있어요! 도와주세요! | 횡단보도 안전교육 게임 | 드래곤디와 함께하는 동물의 왕국 게임🐾 | 드래곤디 인기동요 | DragonDee | Kids Song
+  { type: 'yt', id: 'v5vdc-HfEEA' }, // Контакт мультфильм СССР 1978
+  { type: 'yt', id: 'egjnEfm1Xok' }, // Betty Boop Gets on a Bus (1935)
+  { type: 'yt', id: 'PVT63ZwrnjA' }, // Bremen Town Musicians (1935) | UB Iwerks ComiColor Cartoon
+  { type: 'yt', id: 'nblpob8gyzs' }, // Defenders of the Earth - Opening Sequence
+  { type: 'yt', id: '4Ah2I166f_U' }, // GI Joe 1080p HD Bluray Intro
+  { type: 'yt', id: 'BTXoZMSBq7c' }, // Hercules (1997) - Hercules Versus Hydra [UHD]
+  { type: 'yt', id: 'vWzkzjGOPaU' }, // Turtles vs Batman | Batman vs Teenage Mutant Ninja Turtles
+  { type: 'yt', id: 'Q0CUMk890I8' }, // Harley vs. Mercy
+  { type: 'yt', id: 'pfP93sfiV0c' }, // dcshg | all villain and hero transformations
+  { type: 'yt', id: '3pxrECZYEAA' }, // Cosmohedron | Animated Short
+  { type: 'yt', id: '7NpL-poj2jo' }, // Artscuz Experimental Art Film 24/6/25
+  { type: 'yt', id: 'rWMtZ_v2imw' }, // Watch While High - The Rock
+  { type: 'yt', id: 'NWeyUpqnKuk' }, // cat city
+  { type: 'yt', id: 'CWnqX41JHuM' }, // PUPARIA
+  { type: 'yt', id: 'ENCnH7mbUjk' }, // Black Myth Wukong - Chapter 3 Ending Cutscene (4K Animation)
+  { type: 'yt', id: '6jZ2G--y1hw' }, // Ёжик в тумане | Советские мультфильмы для детей
+  { type: 'yt', id: 'Y2J7Rwd-kLM' }, // Ивашка из Дворца пионеров (Ivashka Iz Dvorca Pionerov) 1981 - Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'ZYIVNTrSdrg' }, // Ералаш №5 "Как сейчас помню..."
+  { type: 'yt', id: '0HrxSCq-8gU' }, // Ералаш №271 "Вот такая драма"
+  { type: 'yt', id: 'kztCiE1gxR4' }, // Tom & Jerry | Bellyache | WB Kids
+  { type: 'yt', id: '6zG9xYUDT6s' }, // Flushed! | A Mickey Mouse Cartoon | Disney Shorts
+  { type: 'yt', id: 'Ot6zd5dW1Nk' }, // OK K.O. Let's Be Heroes! | KO and Sonic The Hedgehog | Cartoon Network
+  { type: 'yt', id: 'QU9d6cEAG-0' }, // Чудеса Хэллоуина - Песенки Маши (Песенки про Хэллоуин)
+  { type: 'yt', id: 'XgcqPX5zdeI' }, // Маша оживляет костюмы для Хэллоуина - Песенки Маши (Песенки про Хэллоуин)
+  { type: 'yt', id: '1wHtAWnwcvw' }, // Adventure Time | Grass Finn | Cartoon Network
+  { type: 'yt', id: 'irUwDmnpSYI' }, // Adventure Time | Flute Spell | Cartoon Network
+  { type: 'yt', id: 'kO4xjta-lPE' }, // Прятки с семьёй Акулёнка на Хэллоуин | Семья Акул | Пинкфонг Песни для Детей
+  { type: 'yt', id: 'OZD3YukZZIQ' }, // Песенки Маши - Воздушный змей (Детские песни/Песни для детей)
+  { type: 'yt', id: 'EyGuBM1ELf4' }, // Toy Story 2 - Buzz Lightyear opening scene HD
+  { type: 'yt', id: 'SNkJKHUFM50' }, // Find The Character Mario Bros, Luigi, Toad and Princess Peach
+  { type: 'yt', id: 'z3hMX65Khtg' }, // Pokémon - I Choose You! | FULL EPISODE 1 | Season 1
+  { type: 'yt', id: 'xM24hiwTAe8' }, // Pikachu vs. Raichu! | Pokémon: Indigo League | Official Clip
+  { type: 'yt', id: '3L3-YrNpvNw' }, // Guess The Pokemon by emoji | 20 Pokemon Challenge part 4
+  { type: 'yt', id: 'R_3t7sHZVA' }, // I Love Pikachu and Eevee More and More! | Pokémon Song | Original Kids Song | Pokémon Kids TV
+  { type: 'yt', id: 'xTmgJ8-HCtI' }, // The Battling Eevee Brothers | POKÉMON FULL EPISODE 37 | Season 1
+  { type: 'yt', id: '69C77_ek6Hw' }, // Los mejores momentos de Pikachu | Pokémon | Cartoon Network
+  { type: 'yt', id: 'zLJ_v0_wgB8' }, // Hello Kitty and Friends - Supercute Adventures | El Mal Día de Kuromi - 1ª Temp. / EP 03
+  { type: 'yt', id: 'dncmL4JitnY' }, // Bob Esponja se astilla 🤕 | Nickelodeon en Español
+  { type: 'yt', id: 'OPNnSoHsUYY' }, // Губка Боб | Каждый сотрудник КРАБА КРАСТИ 🍔 | Губка Боб Квадратные Штаны | Nickelodeon Cyrillic
+  { type: 'yt', id: 'FEJV57ifqE8' }, // Маша и Леопольд. Не порть мне вечеринку - Серии для всей семьи - Lion Family на русском - Мультик
+  { type: 'yt', id: '7gekG1TCj_w' }, // Kitty kitty meow meow
+  { type: 'yt', id: 'ubjQHRftOhI' }, // Penguin Family Hooray
+  { type: 'yt', id: 'J0Q9RF9U14Y' }, // Мультфильм Звероферма Скотный двор 1954 год
+  { type: 'yt', id: 'nJhtVdMyFFc' }, // Губка Боб Квадратные Штаны | 2 сезон 16 серия | Nickelodeon Россия
+  { type: 'yt', id: 'txLKZ2oLwa8' }, // Эрудит - Смешарики 2D | Мультфильмы для детей
+  { type: 'yt', id: 'v6jw6KRIOmw' }, // PIKACHU SONG 1 HOUR
+  { type: 'yt', id: 'QpEfHVFilRc' }, // Tom & Jerry | Concert Madness | Classic Cartoon | WB Kids
+  { type: 'yt', id: 'FzeFyKiPHZ8' }, // Looney Tunes | Bugs the Pianist | Classic Cartoon | WB Kids
+  { type: 'yt', id: 'b7I5PXBxwlk' }, // Animal Phonics | ABC | with Morphle
+  { type: 'yt', id: 'LxdoctAKFCU' }, // Песенки Маши - Песня про бабочку (Детские песни/песни для детей)
+  { type: 'yt', id: 'KxSGM6_xIxQ' }, // Feed the Birds | A Mickey Mouse Cartoon | ‪@disneykids‬
+  { type: 'yt', id: 'DAql2MFZrkw' }, // Даниил Хармс - Однажды
+  { type: 'yt', id: 'Hq_ybPa8Jss' }, // Уроки осторожности тётушки Совы - Электричество (серия 3) // + https://www.youtube.com/watch?v=nt2HtfCKvxk&list=PLDCCB01DCB62A5344
+  { type: 'yt', id: 'mIGhAaG69M' }, // Даниил Хармс мультфильм.Очень,очень вкусный пирог.Я захотел устроить бал.Даниил хармс стихи
+  { type: 'yt', id: 'n1PjzLSh1c' }, // Новогодние стихи.Стихи для деда мороза.Стихи на утренник.Ирина Токмакова .Новогодние мультики
+  { type: 'yt', id: '8j2C6q7VBDg' }, // Смешные мультики про котов.Про кошек и собак. Удивительная кошка.Даниил Хармс.#Прокошек
+  { type: 'yt', id: 'XDKaEHkeys4' }, // Приключения поросенка Фунтика. Мультфильм. Все серии (1986)
+  { type: 'yt', id: 'BQmGXzNMw0E' }, // Винни пух все серии (Vinni Puh) 1969-1972 — Золотая коллекция Soyuzmulfilm
+  { type: 'yt', id: 'zUDWZBLwk9c' }, // Нехочуха. Мультфильм (1986)
+  { type: 'yt', id: 'nDqFpXl7fqI' }, // ПРЕВОСХОДНЫЙ МУЛЬТИК! "В Лесной Чаще" Союзмультфильм. Советские мультики для детей
+  { type: 'yt', id: 'lbFRsPNSoxs' }, // Коварное болото
+  { type: 'yt', id: 'U2q-PlWANL0' }, // Tom und Jerry | Schlaflose Nacht | Cartoonito
+  { type: 'yt', id: 'xFpvOAM5-M' }, // Мультик . Жизнь прекрасна 🤗
+  { type: 'yt', id: 'ORrqkh9LvHA' }, // Моя жизнь (мультфильм про поросёнка HQ )
+  { type: 'yt', id: 'hRMuUIbULUk' }, // Стихотворение «Очень страшная история» Даниил Хармс. Читает Дарья Кисенко.
+  { type: 'yt', id: 'PLjYqJOvfkY' }, // Все правила русского языка за 1 класс
+  { type: 'yt', id: 'eEe8PWYRClE' }, // Аистенок Кич (1971 год) мультфильм
+  { type: 'yt', id: 'vRWxxE5GK-k' }, // Villains War: Mahisha and Viy vs Vishap, Dragons and Snake
+  { type: 'yt', id: '6ttXtRIHdpA' }, // Non-Disney Villain War: Round Three - Part 2
+  // Vimeo
   { type: 'vi', id: '162736398' }, // Nature documentary
   { type: 'vi', id: '56282283' },  // Short film
   { type: 'vi', id: '148751763' }, // Animation
   { type: 'vi', id: '125095515' } // Art/Creative
 ];
 let currentIndex = 0; // Текущий индекс видео
+
+// Make variables accessible to tests by exposing them on window
+window.currentVideoIndex = 0;
+window.videoCount = videos.length;
+window.consecutiveFailures = 0;
 const container = document.getElementById('PLAYER');
 let player = null;
 let videoChangeCount = 0;
-const MAX_VIDEOS_BEFORE_RECREATE = 5; // Пересоздаем плеер каждые 5 видео
+const MAX_VIDEOS_BEFORE_RECREATE = 20; // Пересоздаем плеер каждые 20 видео (увеличили для стабильности)
 let memoryCheckInterval;
 let lastProvider = null; // Последний использованный провайдер
 const PREFER_PROVIDER_ALTERNATION = false; // Отключено - не мешаем моноисточникам
 let consecutiveFailures = 0;
+
+// Constants will be exposed to window after they are all defined
+
+// Function to sync window variables with local variables
+function syncWindowVariables() {
+  window.currentVideoIndex = currentIndex;
+  window.consecutiveFailures = consecutiveFailures;
+  window.videoCount = videos.length;
+}
+
+// Expose videos array on window
+window.videos = videos;
+
+// Function to expose all functions on window for tests
+function exposeFunctionsToWindow() {
+  // Expose existing functions
+  window.logMemoryUsage = logMemoryUsage;
+  window.startWatchdog = startWatchdog;
+  window.stopWatchdog = stopWatchdog;
+  window.createPlayer = createPlayer;
+  
+  // Create aliases for functions with different names
+  window.loadNextVideo = forceNextVideo;
+  window.cleanupPlayer = destroyPlayer;
+  window.handleVideoError = handleVideoFailure;
+  
+  // Expose new keyboard control functions
+  window.togglePlayPause = togglePlayPause;
+  window.loadRandomVideo = loadRandomVideo;
+  window.goBackInHistory = goBackInHistory;
+  
+  // Expose player settings for testing
+  window.playerSettings = playerSettings;
+  
+  // Create missing functions that tests expect
+  window.checkVideoProgress = function() {
+    if (player && player.currentTime !== undefined && player.duration !== undefined) {
+      return {
+        currentTime: player.currentTime,
+        duration: player.duration,
+        progress: player.duration > 0 ? player.currentTime / player.duration : 0
+      };
+    }
+    return { currentTime: 0, duration: 0, progress: 0 };
+  };
+  
+  window.handleLoadTimeout = function() {
+    console.warn('Load timeout triggered by test');
+    handleVideoFailure('test_timeout');
+  };
+}
 const MAX_CONSECUTIVE_FAILURES = 3;
 let currentVideoTimeout = null;
 const VIDEO_LOAD_TIMEOUT = 15000; // 15 секунд на загрузку
@@ -120,10 +348,162 @@ let watchdogInterval = null;
 let lastCurrentTime = -1;
 let stuckTimeCount = 0;
 let zeroTimeCount = 0; // Счетчик для currentTime = 0
-let WATCHDOG_CHECK_INTERVAL = 3000; // Проверяем каждые 3 секунды (может уменьшаться)
-const WATCHDOG_FAST_INTERVAL = 1000; // Ускоренная проверка при проблемах
-const MAX_STUCK_CHECKS = 3; // 3 проверки подряд = 9 секунд без прогресса
-const MAX_ZERO_TIME_CHECKS = 4; // 4 проверки подряд = 12 секунд на currentTime=0
+let missingVideoCount = 0; // Счетчик для пропавшего видео элемента
+const WATCHDOG_CHECK_INTERVAL = 10000; // Проверяем каждые 10 секунд (увеличили для стабильности)
+const WATCHDOG_FAST_INTERVAL = 5000; // Ускоренная проверка каждые 5 секунд
+const MAX_STUCK_CHECKS = 6; // 6 проверок подряд = 60 секунд без прогресса
+const MAX_ZERO_TIME_CHECKS = 10; // 10 проверок = 100 секунд на currentTime=0
+
+// Autoplay and History System
+class VideoPlayerSettings {
+  constructor() {
+    this.AUTOPLAY_KEY = 'videoPlayerAutoplay';
+    this.HISTORY_KEY = 'videoPlayerHistory';
+    this.historySize = this.getHistorySize();
+    this.watchHistory = this.loadHistory();
+    this.autoplayAllowed = this.getAutoplayPreference();
+    this.historyPosition = 0; // Текущая позиция в истории (0 = последнее видео)
+  }
+
+  getHistorySize() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const size = urlParams.get('historySize') || urlParams.get('history');
+    return size ? parseInt(size) : Infinity;
+  }
+
+  setAutoplayPreference(allowed) {
+    this.autoplayAllowed = allowed;
+    localStorage.setItem(this.AUTOPLAY_KEY, allowed ? 'true' : 'false');
+  }
+
+  getAutoplayPreference() {
+    const stored = localStorage.getItem(this.AUTOPLAY_KEY);
+    return stored === null ? null : stored === 'true';
+  }
+
+  addToHistory(videoId, title = null, writeToCache = true) {
+    // Удаляем дубликаты для гарантии уникальности
+    this.watchHistory = this.watchHistory.filter(item => item.id !== videoId);
+    this.watchHistory.unshift({
+      id: videoId,
+      title: title || videoId,
+      timestamp: Date.now()
+    });
+    if (this.watchHistory.length > this.historySize) {
+      this.watchHistory = this.watchHistory.slice(0, this.historySize);
+    }
+    this.historyPosition = 0; // Сбрасываем позицию при добавлении нового видео
+    if (writeToCache) {
+      this.saveHistory();
+    }
+    this.updateHistoryUI();
+  }
+
+  loadHistory() {
+    try {
+      const stored = localStorage.getItem(this.HISTORY_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  saveHistory() {
+    try {
+      localStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.watchHistory));
+    } catch (e) {
+      console.warn('Failed to save history:', e);
+    }
+  }
+
+  isInHistory(videoId) {
+    return this.watchHistory.some(item => item.id === videoId);
+  }
+
+  getAvailableVideos() {
+    return videos.filter(video => !this.isInHistory(video.id));
+  }
+
+  updateHistoryUI() {
+    const historyContent = document.getElementById('historyContent');
+    if (!historyContent) return;
+    if (this.watchHistory.length === 0) {
+      historyContent.innerHTML = '<p style="opacity: 0.6;">История пуста</p>';
+      return;
+    }
+    historyContent.innerHTML = this.watchHistory.map((item, index) => 
+      `<div style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 14px;">
+        <div style="font-weight: bold;">${index + 1}. ${item.title}</div>
+        <div style="opacity: 0.6; font-size: 12px;">${new Date(item.timestamp).toLocaleTimeString()}</div>
+      </div>`
+    ).join('');
+  }
+
+  showAutoplayDialog() {
+    document.getElementById('autoplayDialog').style.display = 'block';
+  }
+
+  hideAutoplayDialog() {
+    document.getElementById('autoplayDialog').style.display = 'none';
+  }
+
+  toggleHistoryWindow() {
+    const historyWindow = document.getElementById('historyWindow');
+    const isVisible = historyWindow.style.display !== 'none';
+    historyWindow.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) this.updateHistoryUI();
+  }
+
+  // Новые методы для навигации по истории
+  canGoBack() {
+    return this.historyPosition < this.watchHistory.length - 1;
+  }
+
+  goBackInHistory() {
+    if (!this.canGoBack()) {
+      console.log('No more history, will do random selection without cache');
+      return null; // Нулл означает случайный выбор
+    }
+    
+    // Удаляем текущее видео из истории (последнее добавленное)
+    if (this.historyPosition === 0 && this.watchHistory.length > 0) {
+      this.watchHistory.shift(); // Удаляем первый элемент (текущее видео)
+      this.saveHistory();
+      this.updateHistoryUI();
+    } else {
+      this.historyPosition++;
+    }
+    
+    if (this.historyPosition >= this.watchHistory.length) {
+      console.log('Reached end of history, will do random selection without cache');
+      return null;
+    }
+    
+    const previousVideo = this.watchHistory[this.historyPosition];
+    console.log(`Going back in history to position ${this.historyPosition}: ${previousVideo.title}`);
+    return previousVideo;
+  }
+
+  removeCurrentFromHistory() {
+    // Удаляем текущее видео из истории
+    if (this.historyPosition === 0 && this.watchHistory.length > 0) {
+      const removed = this.watchHistory.shift();
+      console.log(`Removed current video from history: ${removed.title}`);
+      this.saveHistory();
+      this.updateHistoryUI();
+      return removed;
+    }
+    return null;
+  }
+}
+
+const playerSettings = new VideoPlayerSettings();
+
+// Now expose all constants to window for tests
+window.MAX_VIDEOS_BEFORE_RECREATE = MAX_VIDEOS_BEFORE_RECREATE;
+window.MAX_CONSECUTIVE_FAILURES = MAX_CONSECUTIVE_FAILURES;
+window.VIDEO_LOAD_TIMEOUT = VIDEO_LOAD_TIMEOUT;
+window.WATCHDOG_CHECK_INTERVAL = WATCHDOG_CHECK_INTERVAL;
 
 // Мониторинг памяти
 function logMemoryUsage() {
@@ -155,6 +535,7 @@ function startWatchdog() {
   stopWatchdog();
   lastCurrentTime = -1;
   stuckTimeCount = 0;
+  missingVideoCount = 0; // Сбрасываем счетчик пропавшего видео
   
   // Адаптивный интервал проверок
   const interval = consecutiveFailures > 0 ? WATCHDOG_FAST_INTERVAL : WATCHDOG_CHECK_INTERVAL;
@@ -183,11 +564,20 @@ function startWatchdog() {
         return;
       }
       
-      // Обнаружение пропавшего видео (только звук)
+      // Обнаружение пропавшего видео (только звук) - улучшенная логика
       if (hasVideoElement && !videoVisible && currentTime > 0 && !isPaused) {
-        console.warn('Video disappeared but audio continues - likely postMessage issue');
-        handleVideoFailure('watchdog_video_disappeared');
+        missingVideoCount++;
+        console.warn(`Video disappeared but audio continues - likely postMessage issue (count: ${missingVideoCount})`);
+        
+        // Если видео отсутствует слишком долго, принудительно переключаем
+        if (missingVideoCount >= 4) { // 4 проверки = ~40-60 секунд
+          console.warn('Video element missing too long, forcing next video');
+          handleVideoFailure('missing_video_element');
+          return;
+        }
         return;
+      } else {
+        missingVideoCount = 0; // Сбрасываем счетчик если видео вернулось
       }
       
       // Проверяем прогресс воспроизведения
@@ -263,10 +653,28 @@ function getRandomInt(max) {
 }
 
 function createPlayer() {
-  return new Plyr(container, { 
-    autoplay: true, 
-    controls: ['play', 'progress', 'mute', 'volume', 'fullscreen']
-  });
+  try {
+    if (!container) {
+      console.error('Container element not found!');
+      return null;
+    }
+    
+    console.log('Creating new Plyr player...');
+    const newPlayer = new Plyr(container, { 
+      autoplay: playerSettings.autoplayAllowed === true, // Используем настройки пользователя
+      controls: ['play', 'progress', 'mute', 'volume', 'fullscreen'],
+      clickToPlay: true
+    });
+    
+    if (newPlayer) {
+      console.log('Plyr player created successfully');
+    }
+    
+    return newPlayer;
+  } catch (error) {
+    console.error('Failed to create player:', error);
+    return null;
+  }
 }
 
 function destroyPlayer(forceful = false) {
@@ -338,11 +746,21 @@ function loadVideo(index) { // Функция для загрузки и вос�
     const needsForcefulCleanup = consecutiveFailures > 1 || videoChangeCount % (MAX_VIDEOS_BEFORE_RECREATE * 2) === 0;
     destroyPlayer(needsForcefulCleanup);
     
-    const delay = needsForcefulCleanup ? 600 : 200; // Большая задержка при принудительной очистке
+    const delay = needsForcefulCleanup ? 1500 : 800; // Увеличили задержку для стабильности пересоздания
     setTimeout(() => {
+      console.log('Attempting to recreate player...');
       player = createPlayer();
-      setupPlayerEvents();
-      setVideoSource(video);
+      if (player) {
+        console.log('Player recreated successfully');
+        setupPlayerEvents();
+        // Дополнительная задержка перед загрузкой видео
+        setTimeout(() => {
+          setVideoSource(video);
+        }, 300);
+      } else {
+        console.error('Failed to recreate player, triggering recovery');
+        handleVideoFailure('player_creation_failed');
+      }
     }, delay);
     return;
   }
@@ -379,10 +797,17 @@ function setVideoSource(video) {
     startVideoTimeout();
     
     setTimeout(() => {
-      if (!isRecovering) {
-        player.play().catch(e => {
-          console.warn('Autoplay blocked or failed:', e);
-        });
+      if (!isRecovering && player && player.play) {
+        try {
+          const playPromise = player.play();
+          if (playPromise && playPromise.catch) {
+            playPromise.catch(e => {
+              console.warn('Autoplay blocked or failed:', e);
+            });
+          }
+        } catch (e) {
+          console.warn('Error calling player.play():', e);
+        }
       }
     }, 200); // Немного увеличиваем задержку
     
@@ -395,19 +820,31 @@ function setVideoSource(video) {
 function getNextVideoIndex() {
   // При множественных ошибках подряд, пробуем другой провайдер
   if (consecutiveFailures >= 2 && lastProvider) {
-    const alternativeProviders = videos.filter(v => v.type !== lastProvider);
-    if (alternativeProviders.length > 0) {
-      console.log('Multiple failures, trying different provider');
-      const randomAlt = alternativeProviders[getRandomInt(alternativeProviders.length)];
+    const availableVideos = playerSettings.getAvailableVideos().filter(v => v.type !== lastProvider);
+    if (availableVideos.length > 0) {
+      console.log('Multiple failures, trying different provider from available videos');
+      const randomAlt = availableVideos[getRandomInt(availableVideos.length)];
       return videos.indexOf(randomAlt);
     }
   }
   
-  // Обычный случайный выбор
+  // Выбираем из видео, которые не в истории просмотра
+  const availableVideos = playerSettings.getAvailableVideos();
+  
+  if (availableVideos.length === 0) {
+    console.log('All videos watched, clearing history and starting fresh');
+    playerSettings.watchHistory = [];
+    playerSettings.saveHistory();
+    return getRandomInt(videos.length);
+  }
+  
+  console.log(`Choosing from ${availableVideos.length} unwatched videos (${playerSettings.watchHistory.length} in history)`);
+  
   let newIndex;
   do {
-    newIndex = getRandomInt(videos.length);
-  } while (newIndex === currentIndex && videos.length > 1); // Не повторяем то же видео
+    const randomVideo = availableVideos[getRandomInt(availableVideos.length)];
+    newIndex = videos.indexOf(randomVideo);
+  } while (newIndex === currentIndex && availableVideos.length > 1);
   
   return newIndex;
 }
@@ -431,6 +868,7 @@ function handleVideoFailure(reason) {
   if (isRecovering) return;
   
   consecutiveFailures++;
+  syncWindowVariables();
   console.error(`Video failure (${reason}). Consecutive failures: ${consecutiveFailures}`);
   
   clearVideoTimeout();
@@ -444,11 +882,13 @@ function handleVideoFailure(reason) {
     console.warn(`${isWatchdogFailure ? 'Watchdog failure' : 'Too many consecutive failures'}, forcing player recreation`);
     videoChangeCount = MAX_VIDEOS_BEFORE_RECREATE - 1;
     consecutiveFailures = 0;
+    syncWindowVariables();
   }
   
   const delay = isWatchdogFailure ? 500 : 2000;
   setTimeout(() => {
     currentIndex = getNextVideoIndex();
+    syncWindowVariables();
     loadVideo(currentIndex);
     isRecovering = false;
   }, delay);
@@ -456,13 +896,26 @@ function handleVideoFailure(reason) {
 
 function handleVideoSuccess() {
   consecutiveFailures = 0;
+  syncWindowVariables();
   clearVideoTimeout();
   isRecovering = false;
   stuckTimeCount = 0;
   zeroTimeCount = 0;
+  
+  // Добавляем видео в историю просмотра
+  if (currentIndex >= 0 && currentIndex < videos.length) {
+    const video = videos[currentIndex];
+    const title = video.title || `${video.type === 'yt' ? 'YouTube' : 'Vimeo'}: ${video.id}`;
+    playerSettings.addToHistory(video.id, title);
+  }
 }
 
 function setupPlayerEvents() {
+  if (!player) {
+    console.warn('Cannot setup player events: player is null');
+    return;
+  }
+  
   // Обертка для безопасного вызова событий
   function safeEventHandler(eventName, handler) {
     return function(...args) {
@@ -471,10 +924,15 @@ function setupPlayerEvents() {
       } catch (e) {
         if (e.message && e.message.includes('postMessage')) {
           console.warn(`PostMessage error in ${eventName} event, ignoring:`, e.message);
+        } else if (e.message && (e.message.includes('catch') || e.message.includes('play'))) {
+          // Ошибки автовоспроизведения - не критичные
+          console.warn(`Autoplay error in ${eventName} event, ignoring:`, e.message);
         } else {
           console.error(`Error in ${eventName} event:`, e);
-          // При критических ошибках запускаем восстановление
-          handleVideoFailure(`event_${eventName}_error`);
+          // Только для критических ошибок, не для ready
+          if (eventName !== 'ready') {
+            handleVideoFailure(`event_${eventName}_error`);
+          }
         }
       }
     };
@@ -485,21 +943,49 @@ function setupPlayerEvents() {
     stopWatchdog();
     handleVideoSuccess();
     currentIndex = getNextVideoIndex();
+    syncWindowVariables();
     loadVideo(currentIndex);
   }));
 
   player.on('ready', safeEventHandler('ready', function () {
     console.log('Player ready, starting playback');
     handleVideoSuccess();
-    if (player && player.play) {
-      player.play().catch(e => {
-        console.warn('Autoplay failed:', e);
-      });
+    
+    // Автовоспроизведение только если пользователь разрешил
+    if (playerSettings.autoplayAllowed === true && player && player.play) {
+      try {
+        const playPromise = player.play();
+        if (playPromise && playPromise.catch) {
+          playPromise.catch(e => {
+            console.warn('Autoplay failed:', e);
+          });
+        }
+      } catch (e) {
+        console.warn('Error calling player.play() in ready event:', e);
+      }
+    } else if (playerSettings.autoplayAllowed === false) {
+      console.log('Autoplay disabled by user preference');
+    } else {
+      console.log('Autoplay preference not set yet');
     }
   }));
   
   player.on('error', safeEventHandler('error', function (e) {
     console.error('Player error:', e);
+    
+    // Проверяем, является ли ошибка критичной
+    const errorMessage = e?.detail?.message || e?.message || '';
+    const errorName = e?.detail?.name || '';
+    
+    // Не критичные ошибки - просто логируем
+    if (errorName === 'PlayInterrupted' || 
+        errorMessage.includes('interrupted by a call to pause') ||
+        errorMessage.includes('play() request was interrupted')) {
+      console.warn('Non-critical player error, ignoring:', errorMessage);
+      return;
+    }
+    
+    // Критичные ошибки - переключаем видео
     stopWatchdog();
     handleVideoFailure('player_error');
   }));
@@ -542,7 +1028,86 @@ function forceNextVideo() {
   consecutiveFailures = Math.max(0, consecutiveFailures - 1);
   isRecovering = false; // Сбрасываем флаг восстановления
   currentIndex = getNextVideoIndex();
+  syncWindowVariables();
   loadVideo(currentIndex);
+}
+
+// Новые функции для управления
+function togglePlayPause() {
+  if (!player) {
+    console.warn('Player not available for play/pause');
+    return;
+  }
+  
+  try {
+    if (player.paused) {
+      player.play();
+      console.log('Video resumed');
+    } else {
+      player.pause();
+      console.log('Video paused');
+    }
+  } catch (error) {
+    console.warn('Error toggling play/pause:', error);
+  }
+}
+
+function loadRandomVideo() {
+  console.log('Random video selection triggered');
+  clearVideoTimeout();
+  stopWatchdog();
+  consecutiveFailures = Math.max(0, consecutiveFailures - 1);
+  isRecovering = false;
+  currentIndex = getNextVideoIndex();
+  syncWindowVariables();
+  loadVideo(currentIndex);
+}
+
+function goBackInHistory() {
+  console.log('Going back in history');
+  const previousVideo = playerSettings.goBackInHistory();
+  
+  if (previousVideo === null) {
+    // Если история закончилась, делаем полностью случайный выбор без записи в кэш
+    console.log('History ended, doing random selection without caching');
+    clearVideoTimeout();
+    stopWatchdog();
+    consecutiveFailures = Math.max(0, consecutiveFailures - 1);
+    isRecovering = false;
+    
+    // Случайный индекс без учета истории
+    currentIndex = getRandomInt(videos.length);
+    syncWindowVariables();
+    
+    // Загружаем видео без добавления в историю
+    const videoId = videos[currentIndex].type === 'yt' ? 
+      videos[currentIndex].id : 
+      `vimeo-${videos[currentIndex].id}`;
+      
+    setVideoSource(videos[currentIndex]);
+    console.log(`Loading random video without cache: ${videoId}`);
+    return;
+  }
+  
+  // Ищем видео по ID в общем списке
+  const videoIndex = videos.findIndex(video => {
+    const videoId = video.type === 'yt' ? video.id : `vimeo-${video.id}`;
+    return videoId === previousVideo.id;
+  });
+  
+  if (videoIndex !== -1) {
+    clearVideoTimeout();
+    stopWatchdog();
+    isRecovering = false;
+    currentIndex = videoIndex;
+    syncWindowVariables();
+    setVideoSource(videos[currentIndex]);
+    console.log(`Loaded video from history: ${previousVideo.title}`);
+  } else {
+    console.warn(`Video from history not found in videos array: ${previousVideo.id}`);
+    // Если видео из истории не найдено, переходим к случайному
+    loadRandomVideo();
+  }
 }
 
 // Проверка здоровья каждые минуту
@@ -570,38 +1135,153 @@ function healthCheck() {
 
 // Обработчики клавиатуры
 document.addEventListener('keydown', function(e) {
-  if (e.code === 'Space' || e.key === 'n' || e.key === 'N') {
+  // Пробел - pause/play
+  if (e.code === 'Space') {
+    e.preventDefault();
+    togglePlayPause();
+  }
+  
+  // Стрелка вправо - случайный выбор из общего списка, исключая историю
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    loadRandomVideo();
+  }
+  
+  // Стрелка влево - назад по истории
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    goBackInHistory();
+  }
+  
+  // N - следующее видео (оставляем для совместимости)
+  if (e.key === 'n' || e.key === 'N') {
     e.preventDefault();
     forceNextVideo();
   }
+  
+  // H - тоггл истории
+  if (e.key === 'h' || e.key === 'H') {
+    e.preventDefault();
+    playerSettings.toggleHistoryWindow();
+  }
 });
 
-// Клик по экрану для следующего видео (но не на контролы плеера)
+// Обработчики для диалога автовоспроизведения
+document.addEventListener('DOMContentLoaded', function() {
+  const autoplayAllow = document.getElementById('autoplayAllow');
+  const autoplayDeny = document.getElementById('autoplayDeny');
+  const toggleHistory = document.getElementById('toggleHistory');
+
+  if (autoplayAllow) {
+    autoplayAllow.addEventListener('click', function() {
+      playerSettings.setAutoplayPreference(true);
+      playerSettings.hideAutoplayDialog();
+      console.log('Пользователь разрешил автовоспроизведение');
+      // Пересоздаём плеер с новыми настройками
+      if (player) {
+        destroyPlayer(false);
+        setTimeout(() => {
+          player = createPlayer();
+          if (player) {
+            setupPlayerEvents();
+            if (currentIndex >= 0) {
+              setVideoSource(videos[currentIndex]);
+            }
+          }
+        }, 500);
+      }
+    });
+  }
+
+  if (autoplayDeny) {
+    autoplayDeny.addEventListener('click', function() {
+      playerSettings.setAutoplayPreference(false);
+      playerSettings.hideAutoplayDialog();
+      console.log('Пользователь отклонил автовоспроизведение');
+    });
+  }
+
+  if (toggleHistory) {
+    toggleHistory.addEventListener('click', function() {
+      playerSettings.toggleHistoryWindow();
+    });
+  }
+});
+
+// Клик по экрану для следующего видео ОТКЛЮЧЕН для стабильности
+/*
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.plyr__controls')) {
     forceNextVideo();
   }
 });
+*/
 
 // Перехват postMessage ошибок
+let postMessageErrorCount = 0;
 window.addEventListener('error', function(e) {
-  if (e.message && e.message.includes('postMessage')) {
-    console.warn('Caught postMessage error, ignoring:', e.message);
+  if (e.message && (e.message.includes('postMessage') || e.message.includes('cross-origin'))) {
+    postMessageErrorCount++;
+    console.warn(`Caught postMessage/CORS error #${postMessageErrorCount}, ignoring:`, e.message);
+    
+    // Если ошибок слишком много, переключаем видео
+    if (postMessageErrorCount > 10 && player) {
+      console.warn('Too many postMessage errors, switching to next video');
+      forceNextVideo();
+      postMessageErrorCount = 0;
+    }
+    
     return true; // Предотвращаем всплывание
   }
 });
 
 // Перехват unhandled promise rejections
 window.addEventListener('unhandledrejection', function(e) {
-  if (e.reason && e.reason.toString && e.reason.toString().includes('postMessage')) {
+  if (e.reason && e.reason.toString && (e.reason.toString().includes('postMessage') || e.reason.toString().includes('cross-origin'))) {
+    postMessageErrorCount++;
     console.warn('Caught postMessage promise rejection, ignoring:', e.reason);
     e.preventDefault();
   }
 });
 
+// Периодический сброс счетчика postMessage ошибок
+setInterval(() => {
+  if (postMessageErrorCount > 0) {
+    console.log(`Resetting postMessage error count (was: ${postMessageErrorCount})`);
+    postMessageErrorCount = Math.max(0, postMessageErrorCount - 2); // Постепенно уменьшаем
+  }
+}, 30000); // Каждые 30 секунд
+
 // Инициализация
 player = createPlayer();
-setupPlayerEvents();
+if (player) {
+  setupPlayerEvents();
+} else {
+  console.error('Failed to create initial player');
+}
+
+// Note: exposeFunctionsToWindow() moved to end of script after all functions are defined
+syncWindowVariables();
+
+// Показываем диалог автовоспроизведения если пользователь ещё не выбрал
+if (playerSettings.autoplayAllowed === null) {
+  console.log('Показываем диалог автовоспроизведения');
+  setTimeout(() => {
+    playerSettings.showAutoplayDialog();
+  }, 1000); // Показываем через секунду после загрузки
+}
+
+// Показываем кнопку истории если история не пуста
+if (playerSettings.watchHistory.length > 0) {
+  setTimeout(() => {
+    const historyWindow = document.getElementById('historyWindow');
+    if (historyWindow) {
+      historyWindow.style.display = 'block';
+      playerSettings.updateHistoryUI();
+    }
+  }, 2000);
+}
+
 loadVideo(currentIndex); // Загрузка первого видео
 
 // Мониторинг памяти каждые 30 секунд
@@ -610,4 +1290,7 @@ logMemoryUsage(); // Первоначальные показатели
 
 // Проверка здоровья каждую минуту
 setInterval(healthCheck, 60000);
+
+// Expose functions to window for testing - MUST be at the end after all functions are defined
+exposeFunctionsToWindow();
 </script></body></html>

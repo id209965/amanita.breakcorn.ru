@@ -133,3 +133,92 @@ class TestJavaScriptFunctions:
             assert True
         except Exception as e:
             pytest.fail(f"JavaScript error was not properly handled: {e}")
+
+    def test_new_keyboard_control_functions(self, loaded_page):
+        """Test that new keyboard control functions exist."""
+        functions_check = loaded_page.execute_script("""
+            return {
+                togglePlayPause: typeof window.togglePlayPause === 'function',
+                loadRandomVideo: typeof window.loadRandomVideo === 'function',
+                goBackInHistory: typeof window.goBackInHistory === 'function'
+            };
+        """)
+        
+        assert functions_check['togglePlayPause'], "togglePlayPause function should exist"
+        assert functions_check['loadRandomVideo'], "loadRandomVideo function should exist"
+        assert functions_check['goBackInHistory'], "goBackInHistory function should exist"
+    
+    def test_player_settings_exposed(self, loaded_page):
+        """Test that playerSettings is exposed to window for testing."""
+        player_settings_exists = loaded_page.execute_script(
+            "return typeof window.playerSettings === 'object' && window.playerSettings !== null;"
+        )
+        assert player_settings_exists, "playerSettings should be exposed to window"
+    
+    def test_history_management_functions(self, loaded_page):
+        """Test history management functions."""
+        history_functions = loaded_page.execute_script("""
+            if (!window.playerSettings) return {};
+            return {
+                canGoBack: typeof window.playerSettings.canGoBack === 'function',
+                goBackInHistory: typeof window.playerSettings.goBackInHistory === 'function',
+                removeCurrentFromHistory: typeof window.playerSettings.removeCurrentFromHistory === 'function',
+                addToHistory: typeof window.playerSettings.addToHistory === 'function',
+                isInHistory: typeof window.playerSettings.isInHistory === 'function'
+            };
+        """)
+        
+        assert history_functions.get('canGoBack'), "canGoBack method should exist"
+        assert history_functions.get('goBackInHistory'), "goBackInHistory method should exist"
+        assert history_functions.get('removeCurrentFromHistory'), "removeCurrentFromHistory method should exist"
+        assert history_functions.get('addToHistory'), "addToHistory method should exist"
+        assert history_functions.get('isInHistory'), "isInHistory method should exist"
+    
+    def test_history_uniqueness(self, loaded_page):
+        """Test that history maintains unique videos."""
+        # Add same video twice and check uniqueness
+        result = loaded_page.execute_script("""
+            if (!window.playerSettings) return { error: 'playerSettings not available' };
+            
+            // Clear history first
+            window.playerSettings.watchHistory = [];
+            
+            // Add same video twice
+            window.playerSettings.addToHistory('test-video-1', 'Test Video 1', false);
+            window.playerSettings.addToHistory('test-video-1', 'Test Video 1', false);
+            
+            return {
+                historyLength: window.playerSettings.watchHistory.length,
+                firstVideoId: window.playerSettings.watchHistory.length > 0 ? window.playerSettings.watchHistory[0].id : null
+            };
+        """)           
+        
+        assert 'error' not in result, f"Error in test: {result.get('error')}"
+        assert result['historyLength'] == 1, "History should contain only one unique video"
+        assert result['firstVideoId'] == 'test-video-1', "History should contain the correct video ID"
+    
+    def test_history_position_management(self, loaded_page):
+        """Test history position tracking."""
+        result = loaded_page.execute_script("""
+            if (!window.playerSettings) return { error: 'playerSettings not available' };
+            
+            // Clear history and reset position
+            window.playerSettings.watchHistory = [];
+            window.playerSettings.historyPosition = 0;
+            
+            // Add some test videos
+            window.playerSettings.addToHistory('video-1', 'Video 1', false);
+            window.playerSettings.addToHistory('video-2', 'Video 2', false);
+            window.playerSettings.addToHistory('video-3', 'Video 3', false);
+            
+            return {
+                initialPosition: window.playerSettings.historyPosition,
+                canGoBack: window.playerSettings.canGoBack(),
+                historyLength: window.playerSettings.watchHistory.length
+            };
+        """)           
+        
+        assert 'error' not in result, f"Error in test: {result.get('error')}"
+        assert result['initialPosition'] == 0, "Initial history position should be 0"
+        assert result['canGoBack'] is True, "Should be able to go back in history"
+        assert result['historyLength'] == 3, "History should contain 3 videos"
