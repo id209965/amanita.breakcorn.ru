@@ -73,7 +73,7 @@ describe('Video Player Integration Tests', () => {
       const initialIndex = initialInfo.currentVideoIndex
       
       // Click on player
-      cy.get('#PLAYER').click()
+      cy.get('#player').click()
       cy.wait(3000)
       cy.waitForVideoLoad()
       
@@ -141,14 +141,11 @@ describe('Video Player Integration Tests', () => {
         
         cy.waitForVideoLoad().then(() => {
           cy.getVideoInfo().then((newInfo) => {
-            if (newInfo.currentVideoIndex !== currentIndex) {
+            if (newInfo && newInfo.currentVideoIndex !== currentIndex) {
               successfulTransitions++
             }
             performTransition(count + 1)
           })
-        }).catch(() => {
-          // Some transitions might fail, continue
-          performTransition(count + 1)
         })
       })
     }

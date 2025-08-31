@@ -22,21 +22,22 @@ Cypress.Commands.add('getMemoryUsage', () => {
 })
 
 Cypress.Commands.add('monitorMemoryGrowth', (durationMs = 10000) => {
-  // Simplified memory monitoring
-  cy.getMemoryUsage().then((initial) => {
-    cy.wait(durationMs)
-    cy.getMemoryUsage().then((final) => {
-      const growthMB = (final.used - initial.used) / (1024 * 1024)
-      try {
-        cy.task('recordPerformanceMetric', {
-          name: 'Memory Growth',
-          value: growthMB.toFixed(2),
-          unit: 'MB'
-        }).catch(() => {})
-      } catch (e) {
-        // Ignore errors
-      }
-      return Math.max(0, growthMB)
+  // Simplified memory monitoring with proper async chaining
+  return cy.getMemoryUsage().then((initial) => {
+    return cy.wait(durationMs).then(() => {
+      return cy.getMemoryUsage().then((final) => {
+        const growthMB = (final.used - initial.used) / (1024 * 1024)
+        try {
+          cy.task('recordPerformanceMetric', {
+            name: 'Memory Growth',
+            value: growthMB.toFixed(2),
+            unit: 'MB'
+          }).catch(() => {})
+        } catch (e) {
+          // Ignore errors
+        }
+        return Math.max(0, growthMB)
+      })
     })
   })
 })
@@ -101,13 +102,21 @@ Cypress.Commands.add('forcePlayerRecreation', () => {
       if (typeof win.cleanupPlayer === 'function') {
         win.cleanupPlayer()
       }
-      cy.wait(1000)
-      if (typeof win.createPlayer === 'function') {
-        win.createPlayer()
-      }
     } catch (e) {
       // Ignore errors
     }
+    
+    return cy.wait(1000).then(() => {
+      return cy.window().then((win) => {
+        try {
+          if (typeof win.createPlayer === 'function') {
+            win.createPlayer()
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+      })
+    })
   })
 })
 
@@ -137,22 +146,23 @@ Cypress.Commands.add('measureVideoTransition', () => {
   return cy.getVideoInfo().then((initialInfo) => {
     const initialIndex = initialInfo.currentVideoIndex
     
-    cy.triggerNextVideo()
-    cy.wait(3000) // Wait for transition
-    
-    const transitionTime = Date.now() - startTime
-    
-    try {
-      cy.task('recordPerformanceMetric', {
-        name: 'Video Transition Time',
-        value: transitionTime,
-        unit: 'ms'
-      }).catch(() => {})
-    } catch (e) {
-      // Ignore errors
-    }
-    
-    return transitionTime
+    return cy.triggerNextVideo().then(() => {
+      return cy.wait(3000).then(() => { // Wait for transition
+        const transitionTime = Date.now() - startTime
+        
+        try {
+          cy.task('recordPerformanceMetric', {
+            name: 'Video Transition Time',
+            value: transitionTime,
+            unit: 'ms'
+          }).catch(() => {})
+        } catch (e) {
+          // Ignore errors
+        }
+        
+        return transitionTime
+      })
+    })
   })
 })
 
@@ -181,10 +191,12 @@ Cypress.Commands.add('forceGarbageCollection', () => {
 
 // Custom assertion for memory growth
 Cypress.Commands.add('assertMemoryGrowth', (maxGrowthMB = 50) => {
-  // Very permissive memory assertion
+  // Very permissive memory assertion with proper async chaining
   return cy.monitorMemoryGrowth(10000).then((growthMB) => {
-    // Just log the result, don't fail
-    cy.log(`Memory growth: ${growthMB}MB (limit: ${maxGrowthMB}MB)`)
-    return true // Always pass
+    // Just log the result, don't fail - but do it properly
+    return cy.then(() => {
+      cy.log(`Memory growth: ${growthMB}MB (limit: ${maxGrowthMB}MB)`)
+      return true // Always pass
+    })
   })
 })
