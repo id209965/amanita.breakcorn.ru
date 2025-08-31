@@ -44,6 +44,12 @@
   <p style="font-size: 12px; margin-top: 20px; margin-bottom: 0; opacity: 0.7;">Выбор сохранится в браузере</p>
 </div>
 
+<!-- Autoplay Blocked Hint -->
+<div id="autoplayHint" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.9); color: white; padding: 20px; border-radius: 10px; text-align: center; z-index: 10001; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); display: none; cursor: pointer;">
+  <h3 style="margin-top: 0; font-size: 18px;">🎬 Нажмите для начала воспроизведения</h3>
+  <p style="font-size: 14px; margin-bottom: 0; opacity: 0.9;">Браузер заблокировал автовоспроизведение</p>
+</div>
+
 <!-- History Window -->
 <div id="historyWindow" style="position: fixed; top: 20px; right: 20px; width: 300px; max-height: 400px; background: rgba(0, 0, 0, 0.8); color: white; border-radius: 8px; padding: 15px; z-index: 9999; display: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);">
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -1037,13 +1043,23 @@ function setupPlayerEvents() {
                   const errorMsg = e.message || e.toString();
                   if (isSafari && errorMsg.includes('user interaction')) {
                     console.warn('Safari requires user interaction for autoplay');
+                    showAutoplayHint();
                   } else if (errorMsg.includes('NotAllowedError')) {
                     console.warn('Autoplay blocked by browser policy - user interaction required');
+                    showAutoplayHint();
                   } else {
                     console.warn('Autoplay failed:', errorMsg);
                   }
                   // Не считаем это ошибкой - это нормальное поведение
                 });
+                
+                // Дополнительная проверка через 2 секунды - если видео не стартовало
+                setTimeout(() => {
+                  if (player && player.paused && !isRecovering) {
+                    console.log('Autoplay appears to have been silently blocked');
+                    showAutoplayHint();
+                  }
+                }, 2000);
               }
             } else if (autoplayAttempted) {
               console.log('Autoplay already attempted for this video, skipping');
@@ -1157,6 +1173,40 @@ function forceNextVideo() {
   currentIndex = getNextVideoIndex();
   syncWindowVariables();
   loadVideo(currentIndex);
+}
+
+// Функции для управления подсказкой автовоспроизведения
+function showAutoplayHint() {
+  const hint = document.getElementById('autoplayHint');
+  if (hint) {
+    hint.style.display = 'block';
+    console.log('Showing autoplay hint - user interaction required');
+    
+    // Автоскрытие через 5 секунд
+    setTimeout(() => {
+      hideAutoplayHint();
+    }, 5000);
+  }
+}
+
+function hideAutoplayHint() {
+  const hint = document.getElementById('autoplayHint');
+  if (hint) {
+    hint.style.display = 'none';
+  }
+}
+
+function handleAutoplayHintClick() {
+  hideAutoplayHint();
+  // Попытка запустить воспроизведение после пользовательского взаимодействия
+  if (player && player.paused) {
+    const playPromise = player.play();
+    if (playPromise && playPromise.catch) {
+      playPromise.catch(e => {
+        console.warn('Manual play attempt failed:', e.message);
+      });
+    }
+  }
 }
 
 // Новые функции для управления
@@ -1359,6 +1409,12 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleHistory.addEventListener('click', function() {
       playerSettings.toggleHistoryWindow();
     });
+  }
+  
+  // Обработчик для подсказки автовоспроизведения
+  const autoplayHint = document.getElementById('autoplayHint');
+  if (autoplayHint) {
+    autoplayHint.addEventListener('click', handleAutoplayHintClick);
   }
 });
 
