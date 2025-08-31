@@ -141,6 +141,7 @@ let videoChangeCount = 0;
 
 // Конфигурация автовоспроизведения на основе URL параметров
 const urlParams = new URLSearchParams(window.location.search);
+const isTestMode = urlParams.get('testMode') === 'true' || (urlParams.get('testMode') !== 'false' && window.location.port === '8000');
 const autoplayConfig = {
   // Использовать gesture chaining (как YouTube) - сохраняет разрешения между видео
   useGestureChaining: urlParams.get('gestureChain') !== 'false',
@@ -149,11 +150,14 @@ const autoplayConfig = {
   // Автоматически давать разрешение на автовоспроизведение при любом взаимодействии
   autoGrantPermission: urlParams.get('autoGrant') !== 'false',
   // Старый режим - всегда пересоздавать плеер (частота 20 видео)
-  oldRecreationMode: urlParams.get('oldMode') === 'true'
+  oldRecreationMode: urlParams.get('oldMode') === 'true' || isTestMode,
+  // Режим тестирования - использует старые константы для обратной совместимости
+  testMode: isTestMode
 };
 
 // Конфигурируемая частота пересоздания плеера
-const MAX_VIDEOS_BEFORE_RECREATE = autoplayConfig.oldRecreationMode ? 20 : (autoplayConfig.useGestureChaining ? 100 : 50);
+const MAX_VIDEOS_BEFORE_RECREATE = autoplayConfig.testMode ? 5 : 
+  (autoplayConfig.oldRecreationMode ? 20 : (autoplayConfig.useGestureChaining ? 100 : 50));
 let memoryCheckInterval;
 let lastProvider = null; // Последний использованный провайдер
 const PREFER_PROVIDER_ALTERNATION = false; // Отключено - не мешаем моноисточникам
@@ -248,7 +252,7 @@ let zeroTimeCount = 0; // Счетчик для currentTime = 0
 let missingVideoCount = 0; // Счетчик для пропавшего видео элемента
 let stateResyncTimeout = null; // Таймаут для синхронизации состояния плеера
 let needsPlayerRecovery = false; // Флаг что нужно восстановление между видео
-const WATCHDOG_CHECK_INTERVAL = 15000; // Проверяем каждые 15 секунд (менее агрессивно)
+const WATCHDOG_CHECK_INTERVAL = autoplayConfig.testMode ? 3000 : 15000; // Тестовый режим: 3с, обычный: 15с
 const WATCHDOG_FAST_INTERVAL = 10000; // Ускоренная проверка каждые 10 секунд
 const MAX_STUCK_CHECKS = 12; // 12 проверок подряд = 180 секунд (3 минуты) без прогресса
 const MAX_ZERO_TIME_CHECKS = 8; // 8 проверок = 120 секунд (2 минуты) на currentTime=0
