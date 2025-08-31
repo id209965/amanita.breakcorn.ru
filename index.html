@@ -180,6 +180,8 @@ function exposeFunctionsToWindow() {
   window.loadRandomVideo = loadRandomVideo;
   window.goBackInHistory = goBackInHistory;
   window.syncPlayerState = syncPlayerState; // Для отладки синхронизации
+  window.registerUserInteraction = registerUserInteraction; // Для отладки user activation
+  window.canUseAutoplay = canUseAutoplay; // Для проверки autoplay
   
   // Expose video recovery functions for debugging
   window.tryRestoreVideoDisplay = tryRestoreVideoDisplay;
@@ -1027,8 +1029,8 @@ function setupPlayerEvents() {
     }, 100);
     
     function tryAutoplayIfAllowed() {
-      // Автовоспроизведение с улучшенной логикой
-      if (playerSettings.autoplayAllowed === true && player && player.play) {
+      // Автовоспроизведение с улучшенной логикой и проверкой user activation
+      if (canUseAutoplay() && player && player.play) {
         // Даем больше времени на стабилизацию, особенно Safari
         const autoplayDelay = isSafari ? 800 : 400;
         
@@ -1036,7 +1038,7 @@ function setupPlayerEvents() {
           try {
             // Проверяем что плеер все еще существует и не воспроизводится
             if (player && player.play && player.paused && !isRecovering && !autoplayAttempted) {
-              console.log(`Starting autoplay after ${autoplayDelay}ms delay`);
+              console.log(`Starting autoplay after ${autoplayDelay}ms delay (user activation: ${userHasInteracted})`);
               autoplayAttempted = true; // Отмечаем попытку
               
               console.log('Player state before autoplay attempt:', {
@@ -1178,6 +1180,9 @@ function setupPlayerEvents() {
         }, autoplayDelay);
       } else if (playerSettings.autoplayAllowed === false) {
         console.log('Autoplay disabled by user preference');
+      } else if (playerSettings.autoplayAllowed === true && !userHasInteracted) {
+        console.log('Autoplay allowed but no user interaction yet - showing hint');
+        showAutoplayHint();
       } else {
         console.log('Autoplay preference not set yet');
       }
@@ -1302,6 +1307,27 @@ function hideAutoplayHint() {
   }
 }
 
+// Функция для сохранения user activation (пользовательского взаимодействия)
+let userHasInteracted = false;
+let lastUserInteraction = 0;
+
+function registerUserInteraction(source = 'unknown') {
+  userHasInteracted = true;
+  lastUserInteraction = Date.now();
+  console.log(`✨ User interaction registered from: ${source}`);
+  
+  // Очищаем таймер синхронизации, т.к. у нас есть user activation
+  clearTimeout(stateResyncTimeout);
+  hideAutoplayHint();
+}
+
+function canUseAutoplay() {
+  const timeSinceInteraction = Date.now() - lastUserInteraction;
+  const recentInteraction = timeSinceInteraction < 30000; // 30 секунд после взаимодействия
+  
+  return userHasInteracted && recentInteraction && playerSettings.autoplayAllowed === true;
+}
+
 // Функция для синхронизации состояния Plyr и YouTube
 function syncPlayerState() {
   if (!player || isRecovering) {
@@ -1343,6 +1369,7 @@ function syncPlayerState() {
 }
 
 function handleAutoplayHintClick() {
+  registerUserInteraction('autoplay_hint_click');
   hideAutoplayHint();
   // Попытка запустить воспроизведение после пользовательского взаимодействия
   if (player) {
@@ -1376,6 +1403,8 @@ function handleAutoplayHintClick() {
 
 // Новые функции для управления
 function togglePlayPause() {
+  registerUserInteraction('toggle_play_pause');
+  
   if (!player) {
     console.warn('Player not available for play/pause');
     return;
@@ -1482,6 +1511,9 @@ document.addEventListener('keydown', function(e) {
     return; // Не перехватываем клавиши в полях ввода
   }
   
+  // Регистрируем любое клавиатурное взаимодействие как user activation
+  registerUserInteraction(`keyboard_${e.key}`);
+  
   // Пробел - pause/play (используем и code и key для Safari)
   if (e.code === 'Space' || e.key === ' ') {
     e.preventDefault();
@@ -1525,6 +1557,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (autoplayAllow) {
     autoplayAllow.addEventListener('click', function() {
+      registerUserInteraction('autoplay_permission_granted');
       playerSettings.setAutoplayPreference(true);
       playerSettings.hideAutoplayDialog();
       console.log('Пользователь разрешил автовоспроизведение');
@@ -1532,10 +1565,11 @@ document.addEventListener('DOMContentLoaded', function() {
       // Просто загружаем видео с новыми настройками, не пересоздавая плеер
       if (player) {
         console.log('Applying autoplay settings to existing player');
-        // Обновляем настройки без пересоздания
-        const videoToLoad = videos[currentIndex] || videos[0];
+        // Выбираем случайное видео вместо первого
+        currentIndex = getNextVideoIndex();
+        const videoToLoad = videos[currentIndex];
         if (videoToLoad) {
-          console.log('Loading video after autoplay permission granted:', videoToLoad.id);
+          console.log('Loading random video after autoplay permission granted:', videoToLoad.id);
           setTimeout(() => {
             setVideoSource(videoToLoad);
             
@@ -1563,9 +1597,11 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Также загружаем видео, но без автозапуска
       if (player && videos.length > 0) {
-        const videoToLoad = videos[currentIndex] || videos[0];
+        // Выбираем случайное видео вместо первого
+        currentIndex = getNextVideoIndex();
+        const videoToLoad = videos[currentIndex];
         if (videoToLoad) {
-          console.log('Loading video without autoplay:', videoToLoad.id);
+          console.log('Loading random video without autoplay:', videoToLoad.id);
           setTimeout(() => {
             setVideoSource(videoToLoad);
           }, 200);
@@ -1588,6 +1624,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (autoplayHint) {
     autoplayHint.addEventListener('click', handleAutoplayHintClick);
   }
+});
+
+// Обработчик кликов для user activation
+document.addEventListener('click', function(event) {
+  registerUserInteraction('click');
 });
 
 // Клик по экрану для следующего видео ОТКЛЮЧЕН для стабильности
@@ -1649,11 +1690,12 @@ function initializePlayer() {
   if (player) {
     setupPlayerEvents();
     syncWindowVariables(); // Обновляем глобальные ссылки
-    // Загружаем первое видео только если автовоспроизведение уже настроено
+    // Загружаем случайное видео только если автовоспроизведение уже настроено
     if (playerSettings.autoplayAllowed !== null && videos.length > 0) {
       setTimeout(() => {
-        console.log('Loading initial video after player setup');
-        setVideoSource(videos[currentIndex] || videos[0]);
+        console.log('Loading initial random video after player setup');
+        currentIndex = getNextVideoIndex(); // Выбираем случайное видео
+        setVideoSource(videos[currentIndex]);
       }, 100);
     }
   } else {
