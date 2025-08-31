@@ -1035,36 +1035,72 @@ function setupPlayerEvents() {
               console.log(`Starting autoplay after ${autoplayDelay}ms delay`);
               autoplayAttempted = true; // Отмечаем попытку
               
-              const playPromise = player.play();
-              if (playPromise && playPromise.catch) {
-                playPromise.then(() => {
-                  console.log('Autoplay started successfully');
-                }).catch(e => {
-                  const errorMsg = e.message || e.toString();
-                  if (isSafari && errorMsg.includes('user interaction')) {
-                    console.warn('Safari requires user interaction for autoplay');
-                    showAutoplayHint();
-                  } else if (errorMsg.includes('NotAllowedError')) {
-                    console.warn('Autoplay blocked by browser policy - user interaction required');
-                    showAutoplayHint();
-                  } else {
-                    console.warn('Autoplay failed:', errorMsg);
-                  }
-                  // Не считаем это ошибкой - это нормальное поведение
-                });
+              console.log('Player state before autoplay attempt:', {
+                paused: player.paused,
+                currentTime: player.currentTime,
+                readyState: player.readyState || 'unknown'
+              });
+              
+              try {
+                const playPromise = player.play();
+                console.log('player.play() returned:', typeof playPromise, playPromise ? 'with promise' : 'without promise');
                 
-                // Дополнительная проверка через 2 секунды - если видео не стартовало
+                if (playPromise && playPromise.then) {
+                  playPromise.then(() => {
+                    console.log('✅ Autoplay started successfully');
+                    console.log('Player state after successful autoplay:', {
+                      paused: player.paused,
+                      currentTime: player.currentTime
+                    });
+                  }).catch(e => {
+                    const errorMsg = e.message || e.toString();
+                    console.warn('❌ Autoplay promise rejected:', errorMsg);
+                    if (isSafari && errorMsg.includes('user interaction')) {
+                      console.warn('Safari requires user interaction for autoplay');
+                      showAutoplayHint();
+                    } else if (errorMsg.includes('NotAllowedError')) {
+                      console.warn('Autoplay blocked by browser policy - user interaction required');
+                      showAutoplayHint();
+                    } else {
+                      console.warn('Autoplay failed with error:', errorMsg);
+                      showAutoplayHint();
+                    }
+                  });
+                } else {
+                  console.warn('player.play() did not return a promise - old browser or sync method');
+                }
+                
+                // Дополнительная проверка через 3 секунды
                 setTimeout(() => {
                   if (player && player.paused && !isRecovering) {
-                    console.log('Autoplay appears to have been silently blocked');
+                    console.log('⚠️ Autoplay appears to have been silently blocked - player still paused after 3s');
+                    console.log('Final player state:', {
+                      paused: player.paused,
+                      currentTime: player.currentTime,
+                      duration: player.duration
+                    });
                     showAutoplayHint();
+                  } else if (player && !player.paused) {
+                    console.log('✅ Autoplay working - player is playing after 3s check');
                   }
-                }, 2000);
+                }, 3000);
+                
+              } catch (syncError) {
+                console.error('Synchronous error calling player.play():', syncError);
+                showAutoplayHint();
               }
             } else if (autoplayAttempted) {
-              console.log('Autoplay already attempted for this video, skipping');
+              console.log('⚠️ Autoplay already attempted for this video, skipping. Player state:', {
+                paused: player ? player.paused : 'no player',
+                currentTime: player ? player.currentTime : 'no player'
+              });
             } else {
-              console.log('Player already playing or unavailable, skipping autoplay');
+              console.log('Player already playing or unavailable, skipping autoplay. Player state:', {
+                exists: !!player,
+                hasPauseMethod: player ? !!player.paused : false,
+                paused: player ? player.paused : 'no player',
+                isRecovering: isRecovering
+              });
             }
           } catch (e) {
             console.warn('Error during delayed autoplay:', e);
