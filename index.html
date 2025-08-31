@@ -1042,15 +1042,29 @@ function setupPlayerEvents() {
               });
               
               try {
+                // Принудительно включаем звук перед воспроизведением
+                if (player.muted !== false) {
+                  console.log('Unmuting player for autoplay attempt');
+                  player.muted = false;
+                }
+                
+                // Устанавливаем громкость на разумные 50%
+                if (player.volume !== undefined && player.volume < 0.5) {
+                  console.log('Setting player volume to 0.5 for autoplay');
+                  player.volume = 0.5;
+                }
+                
                 const playPromise = player.play();
                 console.log('player.play() returned:', typeof playPromise, playPromise ? 'with promise' : 'without promise');
                 
                 if (playPromise && playPromise.then) {
                   playPromise.then(() => {
-                    console.log('✅ Autoplay started successfully');
+                    console.log('✅ Autoplay started successfully with promise');
                     console.log('Player state after successful autoplay:', {
                       paused: player.paused,
-                      currentTime: player.currentTime
+                      currentTime: player.currentTime,
+                      muted: player.muted,
+                      volume: player.volume
                     });
                   }).catch(e => {
                     const errorMsg = e.message || e.toString();
@@ -1067,7 +1081,19 @@ function setupPlayerEvents() {
                     }
                   });
                 } else {
-                  console.warn('player.play() did not return a promise - old browser or sync method');
+                  console.warn('player.play() did not return a promise - using fallback verification');
+                  // Для YouTube Player API через Plyr - нужна дополнительная проверка
+                  setTimeout(() => {
+                    if (player && !player.paused && player.currentTime > 0) {
+                      console.log('✅ Autoplay appears successful - player advancing');
+                    } else if (player && !player.paused && player.currentTime === 0) {
+                      console.warn('⚠️ Player reports playing but not advancing - may need user interaction');
+                      showAutoplayHint();
+                    } else {
+                      console.warn('❌ Autoplay failed - player still paused');
+                      showAutoplayHint();
+                    }
+                  }, 1000);
                 }
                 
                 // Дополнительная проверка через 3 секунды
@@ -1077,11 +1103,48 @@ function setupPlayerEvents() {
                     console.log('Final player state:', {
                       paused: player.paused,
                       currentTime: player.currentTime,
-                      duration: player.duration
+                      duration: player.duration,
+                      muted: player.muted,
+                      volume: player.volume
                     });
-                    showAutoplayHint();
+                    
+                    // Последняя попытка - принудительно с отключенным звуком
+                    console.log('🔇 Attempting muted autoplay as fallback...');
+                    player.muted = true;
+                    const mutedPlayPromise = player.play();
+                    
+                    setTimeout(() => {
+                      if (player && !player.paused) {
+                        console.log('✅ Muted autoplay succeeded - video playing silently');
+                        // Показываем подсказку что можно включить звук
+                        showAutoplayHint();
+                      } else {
+                        console.log('❌ Even muted autoplay failed - showing user hint');
+                        showAutoplayHint();
+                      }
+                    }, 1000);
+                    
                   } else if (player && !player.paused) {
                     console.log('✅ Autoplay working - player is playing after 3s check');
+                    console.log('Playback details:', {
+                      currentTime: player.currentTime,
+                      duration: player.duration || 'unknown',
+                      muted: player.muted,
+                      volume: player.volume,
+                      advancing: player.currentTime > 0
+                    });
+                    
+                    // Проверяем реально ли продвигается видео
+                    if (player.currentTime === 0) {
+                      console.warn('⚠️ Player reports playing but currentTime=0 - may be stalled');
+                      // Дополнительная проверка через 2 секунды
+                      setTimeout(() => {
+                        if (player && player.currentTime === 0 && !player.paused) {
+                          console.log('Video still at 0:00 after 2 more seconds - likely needs user interaction');
+                          showAutoplayHint();
+                        }
+                      }, 2000);
+                    }
                   }
                 }, 3000);
                 
@@ -1235,12 +1298,31 @@ function hideAutoplayHint() {
 function handleAutoplayHintClick() {
   hideAutoplayHint();
   // Попытка запустить воспроизведение после пользовательского взаимодействия
-  if (player && player.paused) {
+  if (player) {
+    console.log('📞 User interaction - attempting to start playbook with sound');
+    
+    // Включаем звук и устанавливаем разумную громкость
+    player.muted = false;
+    if (player.volume !== undefined) {
+      player.volume = 0.7;
+    }
+    
     const playPromise = player.play();
     if (playPromise && playPromise.catch) {
-      playPromise.catch(e => {
-        console.warn('Manual play attempt failed:', e.message);
+      playPromise.then(() => {
+        console.log('✅ Manual playbook started successfully with sound');
+      }).catch(e => {
+        console.warn('❌ Manual play attempt failed:', e.message);
       });
+    } else {
+      // Для не Promise-based API
+      setTimeout(() => {
+        if (player && !player.paused) {
+          console.log('✅ Manual playbook started (legacy API)');
+        } else {
+          console.warn('❌ Manual play attempt failed (legacy API)');
+        }
+      }, 500);
     }
   }
 }
