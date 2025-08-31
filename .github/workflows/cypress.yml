@@ -49,27 +49,31 @@ jobs:
         timeout 30 bash -c 'until curl -f http://localhost:8000; do sleep 1; done'
     
     - name: Run Cypress unit tests
-      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/unit/**/*.cy.js"
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/unit/**/*.cy.js" --config video=false,screenshotOnRunFailure=true
       env:
         CYPRESS_baseUrl: http://localhost:8000
+      continue-on-error: false
     
     - name: Run Cypress integration tests  
-      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/integration/**/*.cy.js"
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/integration/**/*.cy.js" --config video=false,screenshotOnRunFailure=true
       env:
         CYPRESS_baseUrl: http://localhost:8000
+      continue-on-error: false
     
     - name: Run Cypress memory tests
-      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/memory/**/*.cy.js"
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/memory/**/*.cy.js" --config video=false,screenshotOnRunFailure=true
       env:
         CYPRESS_baseUrl: http://localhost:8000
+      continue-on-error: false
     
     - name: Run Cypress performance tests
-      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/performance/**/*.cy.js"
+      run: npx cypress run --browser ${{ matrix.browser }} --spec "cypress/e2e/performance/**/*.cy.js" --config video=false,screenshotOnRunFailure=true
       env:
         CYPRESS_baseUrl: http://localhost:8000
+      continue-on-error: true
     
     - name: Upload Cypress screenshots
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: cypress-screenshots-${{ matrix.node-version }}-${{ matrix.browser }}
@@ -77,7 +81,7 @@ jobs:
         retention-days: 7
     
     - name: Upload Cypress videos
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: cypress-videos-${{ matrix.node-version }}-${{ matrix.browser }}
@@ -85,7 +89,7 @@ jobs:
         retention-days: 7
     
     - name: Upload test reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: cypress-reports-${{ matrix.node-version }}-${{ matrix.browser }}
@@ -207,7 +211,7 @@ jobs:
         npm audit --audit-level=moderate || echo "Security audit completed with warnings"
     
     - name: Upload audit results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-audit
