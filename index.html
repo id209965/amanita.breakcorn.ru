@@ -179,6 +179,7 @@ function exposeFunctionsToWindow() {
   window.togglePlayPause = togglePlayPause;
   window.loadRandomVideo = loadRandomVideo;
   window.goBackInHistory = goBackInHistory;
+  window.syncPlayerState = syncPlayerState; // Для отладки синхронизации
   
   // Expose video recovery functions for debugging
   window.tryRestoreVideoDisplay = tryRestoreVideoDisplay;
@@ -215,6 +216,7 @@ let lastCurrentTime = -1;
 let stuckTimeCount = 0;
 let zeroTimeCount = 0; // Счетчик для currentTime = 0
 let missingVideoCount = 0; // Счетчик для пропавшего видео элемента
+let stateResyncTimeout = null; // Таймаут для синхронизации состояния плеера
 let needsPlayerRecovery = false; // Флаг что нужно восстановление между видео
 const WATCHDOG_CHECK_INTERVAL = 15000; // Проверяем каждые 15 секунд (менее агрессивно)
 const WATCHDOG_FAST_INTERVAL = 10000; // Ускоренная проверка каждые 10 секунд
@@ -827,6 +829,7 @@ function setVideoSource(video) {
 function actuallySetVideoSource(video) {
   // Сбрасываем флаг попытки автовоспроизведения при загрузке нового видео
   autoplayAttempted = false;
+  clearTimeout(stateResyncTimeout); // Отменяем синхронизацию при смене видео
   
   try {
     if (video.type === 'yt') {
@@ -942,6 +945,7 @@ function handleVideoSuccess() {
   consecutiveFailures = 0;
   syncWindowVariables();
   clearVideoTimeout();
+  clearTimeout(stateResyncTimeout); // Отменяем отложенную синхронизацию
   isRecovering = false;
   autoplayAttempted = false; // Сбрасываем флаг попытки автовоспроизведения
   stuckTimeCount = 0;
@@ -1140,8 +1144,11 @@ function setupPlayerEvents() {
                       // Дополнительная проверка через 2 секунды
                       setTimeout(() => {
                         if (player && player.currentTime === 0 && !player.paused) {
-                          console.log('Video still at 0:00 after 2 more seconds - likely needs user interaction');
-                          showAutoplayHint();
+                          console.log('Video still at 0:00 after 2 more seconds - performing state sync');
+                          const syncNeeded = syncPlayerState();
+                          if (!syncNeeded) {
+                            showAutoplayHint();
+                          }
                         }
                       }, 2000);
                     }
@@ -1293,6 +1300,46 @@ function hideAutoplayHint() {
   if (hint) {
     hint.style.display = 'none';
   }
+}
+
+// Функция для синхронизации состояния Plyr и YouTube
+function syncPlayerState() {
+  if (!player || isRecovering) {
+    return;
+  }
+  
+  try {
+    // Проверяем состояние YouTube iframe
+    const iframe = document.querySelector('iframe');
+    if (!iframe) {
+      return;
+    }
+    
+    // Проверяем рассинхронизацию: Plyr думает что воспроизводит, но видео не продвигается
+    const plyrPaused = player.paused;
+    const currentTime = player.currentTime || 0;
+    const isStuck = currentTime === 0 && !plyrPaused;
+    
+    if (isStuck && playerSettings.autoplayAllowed === true) {
+      console.log('⚠️ Обнаружена десинхронизация: Plyr в режиме воспроизведения, но YouTube на паузе');
+      console.log('Проводим синхронизацию состояния...');
+      
+      // Принудительно ставим Plyr на паузу чтобы синхронизировать с YouTube
+      if (player.pause) {
+        player.pause();
+        console.log('✅ Plyr поставлен на паузу для синхронизации');
+        
+        // Показываем подсказку пользователю
+        showAutoplayHint();
+        return true; // Означает, что произвели синхронизацию
+      }
+    }
+    
+  } catch (error) {
+    console.warn('Ошибка при синхронизации состояния плеера:', error);
+  }
+  
+  return false; // Синхронизация не потребовалась
 }
 
 function handleAutoplayHintClick() {
@@ -1491,6 +1538,13 @@ document.addEventListener('DOMContentLoaded', function() {
           console.log('Loading video after autoplay permission granted:', videoToLoad.id);
           setTimeout(() => {
             setVideoSource(videoToLoad);
+            
+            // Планируем проверку синхронизации состояния через несколько секунд
+            clearTimeout(stateResyncTimeout);
+            stateResyncTimeout = setTimeout(() => {
+              console.log('Проверяем синхронизацию Plyr/YouTube после разрешения autoplay');
+              syncPlayerState();
+            }, 4000); // Проверяем через 4 секунды после загрузки
           }, 300);
         }
       } else {
