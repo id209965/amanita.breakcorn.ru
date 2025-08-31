@@ -149,6 +149,8 @@ function syncWindowVariables() {
   window.currentVideo = (currentIndex >= 0 && currentIndex < videos.length) ? videos[currentIndex] : null;
   window.missingVideoCount = missingVideoCount;
   window.needsPlayerRecovery = needsPlayerRecovery;
+  // Обновляем ссылку на плеер для глобального доступа
+  window.player = player;
 }
 
 // Expose videos array on window
@@ -629,6 +631,7 @@ function tryFullPlayerRecreation() {
       player = createPlayer();
       if (player) {
         setupPlayerEvents();
+        syncWindowVariables();
         
         // Загружаем то же видео
         setVideoSource(currentVideo);
@@ -763,6 +766,7 @@ function loadVideo(index) { // Функция для загрузки и вос�
       if (player) {
         console.log('Player recreated successfully');
         setupPlayerEvents();
+        syncWindowVariables();
         // Дополнительная задержка перед загрузкой видео
         setTimeout(() => {
           setVideoSource(video);
@@ -798,6 +802,7 @@ function setVideoSource(video) {
       if (player) {
         console.log('✅ Player recovered successfully during transition');
         setupPlayerEvents();
+        syncWindowVariables();
         // Продолжаем с загрузкой видео
         actuallySetVideoSource(video);
       } else {
@@ -991,41 +996,58 @@ function setupPlayerEvents() {
     console.log('Player ready, starting playback');
     handleVideoSuccess();
     
-    // Автовоспроизведение с улучшенной логикой
-    if (playerSettings.autoplayAllowed === true && player && player.play) {
-      // Даем больше времени на стабилизацию, особенно Safari
-      const autoplayDelay = isSafari ? 800 : 400;
-      
-      setTimeout(() => {
-        try {
-          // Проверяем что плеер все еще существует и не воспроизводится
-          if (player && player.play && player.paused && !isRecovering) {
-            console.log(`Starting autoplay after ${autoplayDelay}ms delay`);
-            
-            const playPromise = player.play();
-            if (playPromise && playPromise.catch) {
-              playPromise.catch(e => {
-                const errorMsg = e.message || e.toString();
-                if (isSafari && errorMsg.includes('user interaction')) {
-                  console.warn('Safari requires user interaction for autoplay');
-                } else if (errorMsg.includes('NotAllowedError')) {
-                  console.warn('Autoplay blocked by browser policy');
-                } else {
-                  console.warn('Autoplay failed:', errorMsg);
-                }
-              });
+    // Дополнительная проверка состояния iframe через небольшую задержку
+    setTimeout(() => {
+      const iframe = document.querySelector('iframe');
+      if (iframe) {
+        console.log('YouTube iframe detected, ensuring proper initialization');
+        // Даем iframe время на полную инициализацию
+        setTimeout(() => {
+          tryAutoplayIfAllowed();
+        }, 300);
+      } else {
+        // Если iframe нет, пробуем автовоспроизведение сразу
+        tryAutoplayIfAllowed();
+      }
+    }, 100);
+    
+    function tryAutoplayIfAllowed() {
+      // Автовоспроизведение с улучшенной логикой
+      if (playerSettings.autoplayAllowed === true && player && player.play) {
+        // Даем больше времени на стабилизацию, особенно Safari
+        const autoplayDelay = isSafari ? 800 : 400;
+        
+        setTimeout(() => {
+          try {
+            // Проверяем что плеер все еще существует и не воспроизводится
+            if (player && player.play && player.paused && !isRecovering) {
+              console.log(`Starting autoplay after ${autoplayDelay}ms delay`);
+              
+              const playPromise = player.play();
+              if (playPromise && playPromise.catch) {
+                playPromise.catch(e => {
+                  const errorMsg = e.message || e.toString();
+                  if (isSafari && errorMsg.includes('user interaction')) {
+                    console.warn('Safari requires user interaction for autoplay');
+                  } else if (errorMsg.includes('NotAllowedError')) {
+                    console.warn('Autoplay blocked by browser policy');
+                  } else {
+                    console.warn('Autoplay failed:', errorMsg);
+                  }
+                });
+              }
+            } else {
+              console.log('Player already playing or unavailable, skipping autoplay');
             }
-          } else {
-            console.log('Player already playing or unavailable, skipping autoplay');
+          } catch (e) {
+            console.warn('Error during delayed autoplay:', e);
           }
-        } catch (e) {
-          console.warn('Error during delayed autoplay:', e);
-        }
-      }, autoplayDelay);
-    } else if (playerSettings.autoplayAllowed === false) {
-      console.log('Autoplay disabled by user preference');
-    } else {
-      console.log('Autoplay preference not set yet');
+        }, autoplayDelay);
+      } else if (playerSettings.autoplayAllowed === false) {
+        console.log('Autoplay disabled by user preference');
+      } else {
+        console.log('Autoplay preference not set yet');
+      }
     }
   }));
   
@@ -1064,12 +1086,37 @@ function setupPlayerEvents() {
     console.log('Video is playing - starting watchdog');
     handleVideoSuccess();
     startWatchdog();
+    
+    // Дополнительная проверка состояния YouTube iframe
+    setTimeout(() => {
+      const iframe = document.querySelector('iframe');
+      if (iframe && iframe.style.opacity !== '1') {
+        console.log('Ensuring iframe visibility after play start');
+        iframe.style.opacity = '1';
+      }
+    }, 500);
   }));
   
   player.on('pause', safeEventHandler('pause', function () {
     const currentTime = player.currentTime || 0;
     if (currentTime > 1) { // Логируем только если это не начало видео
       console.log(`Video paused at ${Math.round(currentTime)}s`);
+    }
+    
+    // Проверяем, что пауза не связана с проблемами YouTube iframe
+    if (currentTime === 0 && playerSettings.autoplayAllowed === true) {
+      console.warn('Video paused at start - might be YouTube iframe issue');
+      setTimeout(() => {
+        const iframe = document.querySelector('iframe');
+        if (iframe && player && player.paused) {
+          console.log('Attempting to fix paused YouTube iframe');
+          // Легкий рефреш iframe для восстановления синхронизации
+          iframe.style.transform = 'translate3d(0,0,0)';
+          setTimeout(() => {
+            iframe.style.transform = '';
+          }, 50);
+        }
+      }, 1000);
     }
   }));
   
@@ -1248,18 +1295,31 @@ document.addEventListener('DOMContentLoaded', function() {
       playerSettings.setAutoplayPreference(true);
       playerSettings.hideAutoplayDialog();
       console.log('Пользователь разрешил автовоспроизведение');
-      // Пересоздаём плеер с новыми настройками
+      
+      // Пересоздаём плеер с новыми настройками и сразу загружаем видео
       if (player) {
         destroyPlayer(false);
         setTimeout(() => {
           player = createPlayer();
           if (player) {
             setupPlayerEvents();
-            if (currentIndex >= 0) {
-              setVideoSource(videos[currentIndex]);
+            syncWindowVariables(); // Обновляем глобальные ссылки
+            
+            // Даем больше времени на стабилизацию после пересоздания
+            const videoToLoad = videos[currentIndex] || videos[0];
+            if (videoToLoad) {
+              console.log('Loading video after autoplay permission granted:', videoToLoad.id);
+              setTimeout(() => {
+                setVideoSource(videoToLoad);
+              }, 1000); // Увеличили с 200 до 1000мс
             }
+          } else {
+            console.error('Failed to recreate player after autoplay permission');
           }
-        }, 500);
+        }, 800); // Увеличили с 300 до 800мс
+      } else {
+        // Если плеера нет, создаём с нуля
+        initializePlayer();
       }
     });
   }
@@ -1269,6 +1329,20 @@ document.addEventListener('DOMContentLoaded', function() {
       playerSettings.setAutoplayPreference(false);
       playerSettings.hideAutoplayDialog();
       console.log('Пользователь отклонил автовоспроизведение');
+      
+      // Также загружаем видео, но без автозапуска
+      if (player && videos.length > 0) {
+        const videoToLoad = videos[currentIndex] || videos[0];
+        if (videoToLoad) {
+          console.log('Loading video without autoplay:', videoToLoad.id);
+          setTimeout(() => {
+            setVideoSource(videoToLoad);
+          }, 200);
+        }
+      } else if (!player) {
+        // Если плеера нет, создаём
+        initializePlayer();
+      }
     });
   }
 
@@ -1332,12 +1406,26 @@ setInterval(() => {
 }, 30000); // Каждые 30 секунд
 
 // Инициализация
-player = createPlayer();
-if (player) {
-  setupPlayerEvents();
-} else {
-  console.error('Failed to create initial player');
+function initializePlayer() {
+  console.log('Initializing player...');
+  player = createPlayer();
+  if (player) {
+    setupPlayerEvents();
+    syncWindowVariables(); // Обновляем глобальные ссылки
+    // Загружаем первое видео только если автовоспроизведение уже настроено
+    if (playerSettings.autoplayAllowed !== null && videos.length > 0) {
+      setTimeout(() => {
+        console.log('Loading initial video after player setup');
+        setVideoSource(videos[currentIndex] || videos[0]);
+      }, 100);
+    }
+  } else {
+    console.error('Failed to create initial player');
+  }
 }
+
+// Запускаем инициализацию
+initializePlayer();
 
 // Note: exposeFunctionsToWindow() moved to end of script after all functions are defined
 syncWindowVariables();
