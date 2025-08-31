@@ -1296,29 +1296,20 @@ document.addEventListener('DOMContentLoaded', function() {
       playerSettings.hideAutoplayDialog();
       console.log('Пользователь разрешил автовоспроизведение');
       
-      // Пересоздаём плеер с новыми настройками и сразу загружаем видео
+      // Просто загружаем видео с новыми настройками, не пересоздавая плеер
       if (player) {
-        destroyPlayer(false);
-        setTimeout(() => {
-          player = createPlayer();
-          if (player) {
-            setupPlayerEvents();
-            syncWindowVariables(); // Обновляем глобальные ссылки
-            
-            // Даем больше времени на стабилизацию после пересоздания
-            const videoToLoad = videos[currentIndex] || videos[0];
-            if (videoToLoad) {
-              console.log('Loading video after autoplay permission granted:', videoToLoad.id);
-              setTimeout(() => {
-                setVideoSource(videoToLoad);
-              }, 1000); // Увеличили с 200 до 1000мс
-            }
-          } else {
-            console.error('Failed to recreate player after autoplay permission');
-          }
-        }, 800); // Увеличили с 300 до 800мс
+        console.log('Applying autoplay settings to existing player');
+        // Обновляем настройки без пересоздания
+        const videoToLoad = videos[currentIndex] || videos[0];
+        if (videoToLoad) {
+          console.log('Loading video after autoplay permission granted:', videoToLoad.id);
+          setTimeout(() => {
+            setVideoSource(videoToLoad);
+          }, 300);
+        }
       } else {
         // Если плеера нет, создаём с нуля
+        console.log('Creating player after autoplay permission granted');
         initializePlayer();
       }
     });
@@ -1449,7 +1440,7 @@ if (playerSettings.watchHistory.length > 0) {
   }, 2000);
 }
 
-loadVideo(currentIndex); // Загрузка первого видео
+// Загрузка первого видео теперь контролируется через initializePlayer()
 
 // Мониторинг памяти каждые 30 секунд
 memoryCheckInterval = setInterval(logMemoryUsage, 30000);
