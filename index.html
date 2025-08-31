@@ -138,7 +138,22 @@ window.consecutiveFailures = 0;
 const container = document.getElementById('PLAYER');
 let player = null;
 let videoChangeCount = 0;
-const MAX_VIDEOS_BEFORE_RECREATE = 20; // Пересоздаем плеер каждые 20 видео (увеличили для стабильности)
+
+// Конфигурация автовоспроизведения на основе URL параметров
+const urlParams = new URLSearchParams(window.location.search);
+const autoplayConfig = {
+  // Использовать gesture chaining (как YouTube) - сохраняет разрешения между видео
+  useGestureChaining: urlParams.get('gestureChain') !== 'false',
+  // Агрессивное автовоспроизведение - пробует с отключенным звуком, потом включает
+  aggressiveAutoplay: urlParams.get('aggressive') !== 'false',
+  // Автоматически давать разрешение на автовоспроизведение при любом взаимодействии
+  autoGrantPermission: urlParams.get('autoGrant') !== 'false',
+  // Старый режим - всегда пересоздавать плеер (частота 20 видео)
+  oldRecreationMode: urlParams.get('oldMode') === 'true'
+};
+
+// Конфигурируемая частота пересоздания плеера
+const MAX_VIDEOS_BEFORE_RECREATE = autoplayConfig.oldRecreationMode ? 20 : (autoplayConfig.useGestureChaining ? 100 : 50);
 let memoryCheckInterval;
 let lastProvider = null; // Последний использованный провайдер
 const PREFER_PROVIDER_ALTERNATION = false; // Отключено - не мешаем моноисточникам
@@ -184,6 +199,9 @@ function exposeFunctionsToWindow() {
   window.canUseAutoplay = canUseAutoplay; // Для проверки autoplay
   window.youtubeStyleAutoplay = youtubeStyleAutoplay; // YouTube-style autoplay
   window.showUnmuteButton = showUnmuteButton; // Кнопка включения звука
+  window.aggressiveAutoplay = aggressiveAutoplay; // Агрессивное автовоспроизведение
+  window.smartUnmute = smartUnmute; // Умное включение звука
+  window.autoplayConfig = autoplayConfig; // Конфигурация
   // Экспонируем состояние gesture chaining
   Object.defineProperty(window, 'gestureChainActive', {
     get: () => gestureChainActive,
@@ -774,22 +792,38 @@ function loadVideo(index) { // Функция для загрузки и вос�
   const video = videos[index];
   videoChangeCount++;
   
-  // Минимизируем пересоздание плеера для сохранения gesture chaining
+  // Конфигурируемая логика пересоздания плеера
   const shouldRecreateForMemory = videoChangeCount > 0 && videoChangeCount % MAX_VIDEOS_BEFORE_RECREATE === 0;
   const memoryUsage = performance.memory ? performance.memory.usedJSHeapSize / 1024 / 1024 : 0;
-  const highMemoryUsage = memoryUsage > 200; // Более 200MB
-  const needsRecreation = !player || (shouldRecreateForMemory && (!gestureChainActive || highMemoryUsage));
+  const highMemoryUsage = memoryUsage > 200;
+  
+  let needsRecreation = !player || shouldRecreateForMemory;
+  
+  // Старый режим - всегда пересоздаем
+  if (autoplayConfig.oldRecreationMode) {
+    needsRecreation = !player || shouldRecreateForMemory;
+  }
+  // Gesture chaining режим - сохраняем при возможности
+  else if (autoplayConfig.useGestureChaining) {
+    needsRecreation = !player || (shouldRecreateForMemory && (!gestureChainActive || highMemoryUsage));
+  }
+  // Обычный режим
+  else {
+    needsRecreation = !player || shouldRecreateForMemory;
+  }
   
   if (needsRecreation) {
-    if (gestureChainActive && shouldRecreateForMemory && !highMemoryUsage) {
+    // Проверяем, можно ли сохранить gesture chain
+    if (autoplayConfig.useGestureChaining && gestureChainActive && shouldRecreateForMemory && !highMemoryUsage) {
       console.log(`🔗 Preserving gesture chain - skipping recreation (memory: ${memoryUsage.toFixed(1)}MB)`);
-      // Просто загружаем следующее видео без пересоздания
       actuallySetVideoSource(video);
       return;
     }
     
-    console.log(`🔄 Recreating player: videos=${videoChangeCount}, memory=${memoryUsage.toFixed(1)}MB, gestureActive=${gestureChainActive}`);
-    gestureChainActive = false; // Пересоздание прерывает gesture chain
+    console.log(`🔄 Recreating player (mode: ${autoplayConfig.oldRecreationMode ? 'old' : 'smart'}): videos=${videoChangeCount}, memory=${memoryUsage.toFixed(1)}MB`);
+    if (autoplayConfig.useGestureChaining) {
+      gestureChainActive = false; // Пересоздание прерывает gesture chain
+    }
     
     const needsForcefulCleanup = consecutiveFailures > 1 || videoChangeCount % (MAX_VIDEOS_BEFORE_RECREATE * 2) === 0;
     destroyPlayer(needsForcefulCleanup);
@@ -952,7 +986,9 @@ function handleVideoFailure(reason) {
   
   if (forceRecreation) {
     console.warn(`${isWatchdogFailure ? 'Watchdog failure' : 'Too many consecutive failures'}, forcing player recreation`);
-    gestureChainActive = false; // Принудительное пересоздание прерывает gesture chain
+    if (autoplayConfig.useGestureChaining) {
+      gestureChainActive = false; // Принудительное пересоздание прерывает gesture chain
+    }
     videoChangeCount = MAX_VIDEOS_BEFORE_RECREATE - 1;
     consecutiveFailures = 0;
     syncWindowVariables();
@@ -1053,8 +1089,10 @@ function setupPlayerEvents() {
     }, 100);
     
     function tryAutoplayIfAllowed() {
-      // YouTube-style автовоспроизведение с gesture chaining
-      if (playerSettings.autoplayAllowed === true && player && player.play) {
+      // Адаптивное автовоспроизведение с конфигурируемыми режимами
+      const shouldTryAutoplay = autoplayConfig.autoGrantPermission || playerSettings.autoplayAllowed === true;
+      
+      if (shouldTryAutoplay && player && player.play) {
         // Даем больше времени на стабилизацию, особенно Safari
         const autoplayDelay = isSafari ? 800 : 400;
         
@@ -1064,14 +1102,19 @@ function setupPlayerEvents() {
               console.log(`Starting YouTube-style autoplay after ${autoplayDelay}ms delay (gesture chain: ${gestureChainActive})`);
               autoplayAttempted = true;
               
-              // Используем YouTube-style autoplay
-              if (gestureChainActive || canUseAutoplay()) {
+              // Выбираем метод автовоспроизведения
+              if (autoplayConfig.aggressiveAutoplay) {
+                // Агрессивный режим - пробуем все методы
+                aggressiveAutoplay(player);
+                return;
+              } else if (autoplayConfig.useGestureChaining && (gestureChainActive || canUseAutoplay())) {
+                // YouTube-style режим
                 youtubeStyleAutoplay(player).then(success => {
                   if (!success) {
                     console.log('YouTube-style autoplay failed, showing hint');
                   }
                 });
-                return; // Выходим рано, не используем старую логику
+                return;
               }
               
               console.log('Player state before autoplay attempt:', {
@@ -1211,19 +1254,23 @@ function setupPlayerEvents() {
             console.warn('Error during delayed autoplay:', e);
           }
         }, autoplayDelay);
-      } else if (playerSettings.autoplayAllowed === false) {
+      } else if (!autoplayConfig.autoGrantPermission && playerSettings.autoplayAllowed === false) {
         console.log('Autoplay disabled by user preference');
-      } else if (playerSettings.autoplayAllowed === true && !gestureChainActive) {
-        console.log('Autoplay allowed but no gesture chain - trying anyway with fallback');
-        // Пробуем автовоспроизведение даже без gesture chain
+      } else if (autoplayConfig.autoGrantPermission || (playerSettings.autoplayAllowed === true && !gestureChainActive)) {
+        console.log('No gesture chain but autoplay enabled - trying aggressive method');
+        // Авто-разрешение или fallback
         setTimeout(() => {
           if (player && !autoplayAttempted) {
             autoplayAttempted = true;
-            youtubeStyleAutoplay(player);
+            if (autoplayConfig.aggressiveAutoplay) {
+              aggressiveAutoplay(player);
+            } else {
+              youtubeStyleAutoplay(player);
+            }
           }
         }, 500);
       } else {
-        console.log('Autoplay preference not set yet');
+        console.log('Autoplay not configured yet - will auto-grant on first interaction');
       }
     }
   }));
@@ -1379,6 +1426,134 @@ function hideUnmuteButton() {
   }
 }
 
+// Агрессивное автовоспроизведение - пробуем все возможные методы
+function aggressiveAutoplay(player) {
+  if (!player || !player.play) {
+    return Promise.resolve(false);
+  }
+
+  console.log('🚀 Aggressive autoplay: trying all methods...');
+  
+  return new Promise((resolve) => {
+    // Метод 1: Начинаем с muted autoplay (самый надежный)
+    player.muted = true;
+    
+    try {
+      const playPromise = player.play();
+      
+      const checkSuccess = () => {
+        setTimeout(() => {
+          if (!player.paused) {
+            console.log('✅ Aggressive autoplay: muted playback started');
+            
+            // Метод 2: Пытаемся включить звук через несколько секунд
+            setTimeout(() => {
+              smartUnmute(player);
+            }, 2000);
+            
+            resolve(true);
+          } else {
+            console.warn('❌ Aggressive autoplay: even muted failed');
+            resolve(false);
+          }
+        }, 1000);
+      };
+      
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.then(checkSuccess).catch(() => {
+          console.warn('Muted play promise rejected, checking anyway...');
+          checkSuccess();
+        });
+      } else {
+        checkSuccess();
+      }
+      
+    } catch (error) {
+      console.warn('❌ Aggressive autoplay failed:', error);
+      resolve(false);
+    }
+  });
+}
+
+// Умное включение звука - пробуем все возможные способы
+function smartUnmute(player, showButton = true) {
+  if (!player) return;
+  
+  console.log('🔊 Smart unmute: attempting to enable sound...');
+  
+  // Метод 1: Просто пытаемся включить звук
+  try {
+    if (player.muted && !player.paused) {
+      player.muted = false;
+      
+      setTimeout(() => {
+        if (!player.muted && !player.paused) {
+          console.log('✅ Smart unmute: sound enabled successfully');
+          return;
+        } else {
+          // Метод 2: Показываем кнопку для пользователя
+          if (showButton) {
+            showSmartUnmuteButton();
+          }
+        }
+      }, 500);
+    }
+  } catch (error) {
+    console.warn('Smart unmute error:', error);
+    if (showButton) {
+      showSmartUnmuteButton();
+    }
+  }
+}
+
+// Кнопка включения звука (улучшенная версия)
+function showSmartUnmuteButton() {
+  hideUnmuteButton(); // Убираем старую кнопку
+  
+  let btn = document.getElementById('smartUnmuteButton');
+  if (!btn) {
+    btn = document.createElement('div');
+    btn.id = 'smartUnmuteButton';
+    btn.innerHTML = `
+      <div style="position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.9); color: white; padding: 12px 18px; border-radius: 25px; cursor: pointer; z-index: 10001; font-size: 14px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: pulse 2s infinite;">
+        <span style="font-size: 18px;">🔊</span>
+        <span>Кликните для включения звука</span>
+      </div>
+      <style>
+        @keyframes pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
+      </style>
+    `;
+    
+    btn.addEventListener('click', () => {
+      registerUserInteraction('smart_unmute_button');
+      if (player) {
+        player.muted = false;
+        player.volume = Math.max(0.7, player.volume || 0);
+        console.log('🔊 User manually enabled sound');
+      }
+      hideSmartUnmuteButton();
+    });
+    
+    document.body.appendChild(btn);
+  }
+  
+  btn.style.display = 'block';
+  
+  // Автоскрытие через 15 секунд
+  setTimeout(() => hideSmartUnmuteButton(), 15000);
+}
+
+function hideSmartUnmuteButton() {
+  const btn = document.getElementById('smartUnmuteButton');
+  if (btn) {
+    btn.style.display = 'none';
+  }
+}
+
 // Функция для сохранения user activation (пользовательского взаимодействия)
 let userHasInteracted = false;
 let lastUserInteraction = 0;
@@ -1393,6 +1568,8 @@ function registerUserInteraction(source = 'unknown') {
   // Очищаем таймер синхронизации, т.к. у нас есть user activation
   clearTimeout(stateResyncTimeout);
   hideAutoplayHint();
+  hideUnmuteButton();
+  hideSmartUnmuteButton();
 }
 
 function canUseAutoplay() {
