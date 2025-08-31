@@ -203,6 +203,7 @@ const MAX_CONSECUTIVE_FAILURES = 3;
 let currentVideoTimeout = null;
 const VIDEO_LOAD_TIMEOUT = 15000; // 15 секунд на загрузку
 let isRecovering = false;
+let autoplayAttempted = false; // Отслеживаем попытки автовоспроизведения
 let watchdogInterval = null;
 let lastCurrentTime = -1;
 let stuckTimeCount = 0;
@@ -818,6 +819,9 @@ function setVideoSource(video) {
 }
 
 function actuallySetVideoSource(video) {
+  // Сбрасываем флаг попытки автовоспроизведения при загрузке нового видео
+  autoplayAttempted = false;
+  
   try {
     if (video.type === 'yt') {
       player.source = {
@@ -933,6 +937,7 @@ function handleVideoSuccess() {
   syncWindowVariables();
   clearVideoTimeout();
   isRecovering = false;
+  autoplayAttempted = false; // Сбрасываем флаг попытки автовоспроизведения
   stuckTimeCount = 0;
   zeroTimeCount = 0;
   missingVideoCount = 0; // Сбрасываем счетчик пропавшего видео
@@ -1020,22 +1025,28 @@ function setupPlayerEvents() {
         setTimeout(() => {
           try {
             // Проверяем что плеер все еще существует и не воспроизводится
-            if (player && player.play && player.paused && !isRecovering) {
+            if (player && player.play && player.paused && !isRecovering && !autoplayAttempted) {
               console.log(`Starting autoplay after ${autoplayDelay}ms delay`);
+              autoplayAttempted = true; // Отмечаем попытку
               
               const playPromise = player.play();
               if (playPromise && playPromise.catch) {
-                playPromise.catch(e => {
+                playPromise.then(() => {
+                  console.log('Autoplay started successfully');
+                }).catch(e => {
                   const errorMsg = e.message || e.toString();
                   if (isSafari && errorMsg.includes('user interaction')) {
                     console.warn('Safari requires user interaction for autoplay');
                   } else if (errorMsg.includes('NotAllowedError')) {
-                    console.warn('Autoplay blocked by browser policy');
+                    console.warn('Autoplay blocked by browser policy - user interaction required');
                   } else {
                     console.warn('Autoplay failed:', errorMsg);
                   }
+                  // Не считаем это ошибкой - это нормальное поведение
                 });
               }
+            } else if (autoplayAttempted) {
+              console.log('Autoplay already attempted for this video, skipping');
             } else {
               console.log('Player already playing or unavailable, skipping autoplay');
             }
@@ -1103,20 +1114,27 @@ function setupPlayerEvents() {
       console.log(`Video paused at ${Math.round(currentTime)}s`);
     }
     
-    // Проверяем, что пауза не связана с проблемами YouTube iframe
+    // Улучшенная логика обработки паузы YouTube
     if (currentTime === 0 && playerSettings.autoplayAllowed === true) {
-      console.warn('Video paused at start - might be YouTube iframe issue');
+      console.warn('Video paused at start - YouTube autoplay policy restriction');
+      // Не пытаемся принудительно запустить - это нормальное поведение YouTube
+    } else if (currentTime > 0 && currentTime < 10 && playerSettings.autoplayAllowed === true) {
+      // Если видео ставится на паузу в начале воспроизведения, можно попробовать возобновить
+      console.log('Video paused during early playback, attempting gentle resume');
       setTimeout(() => {
-        const iframe = document.querySelector('iframe');
-        if (iframe && player && player.paused) {
-          console.log('Attempting to fix paused YouTube iframe');
-          // Легкий рефреш iframe для восстановления синхронизации
-          iframe.style.transform = 'translate3d(0,0,0)';
-          setTimeout(() => {
-            iframe.style.transform = '';
-          }, 50);
+        if (player && player.paused && !isRecovering) {
+          try {
+            const resumePromise = player.play();
+            if (resumePromise && resumePromise.catch) {
+              resumePromise.catch(e => {
+                console.log('Gentle resume failed - respecting YouTube policy:', e.message);
+              });
+            }
+          } catch (e) {
+            console.log('Gentle resume not possible:', e.message);
+          }
         }
-      }, 1000);
+      }, 2000); // Даем больше времени на стабилизацию
     }
   }));
   
