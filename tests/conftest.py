@@ -64,7 +64,19 @@ def loaded_page(browser, base_url):
     )
     
     # Wait a bit more for scripts to initialize
-    time.sleep(2)
+    time.sleep(3)
+    
+    # Activate autoplay permission via user interaction
+    try:
+        browser.execute_script("""
+            if (window.registerUserInteraction) {
+                window.registerUserInteraction('pytest_init');
+            }
+        """)
+        time.sleep(1)  # Wait for activation to process
+    except Exception:
+        # Ignore any errors in activation
+        pass
     
     return browser
 

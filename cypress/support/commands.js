@@ -44,12 +44,14 @@ Cypress.Commands.add('monitorMemoryGrowth', (durationMs = 10000) => {
 
 // Video player commands
 Cypress.Commands.add('waitForVideoLoad', (timeout = 30000) => {
-  // Simulate user interaction to trigger autoplay permission
-  cy.get('body').click({ force: true })
-  
-  // Wait for autoplay activation and video loading
-  cy.wait(5000) // Give time for things to load
+  // Ultra-simple video loading - just wait and continue
+  cy.wait(3000) // Give time for things to load
   return cy.window().then((win) => {
+    // Ensure user interaction for autoplay
+    if (win.playerSettings && win.playerSettings.autoplayAllowed === null) {
+      // Trigger user interaction if autoplay not yet configured
+      win.registerUserInteraction && win.registerUserInteraction('test_interaction')
+    }
     return win.player || {} // Return something
   })
 })
@@ -175,9 +177,13 @@ Cypress.Commands.add('waitForJavaScript', () => {
     expect(win).to.exist
     // Very basic check - just ensure window exists
   }).then(() => {
-    // Simulate user interaction to enable autoplay
-    cy.get('body').click({ force: true })
-    cy.wait(1000) // Wait for interaction to register
+    return cy.window().then((win) => {
+      // Programmatically trigger user interaction for autoplay
+      if (win.registerUserInteraction) {
+        win.registerUserInteraction('cypress_init')
+      }
+      return cy.wait(500) // Brief wait for processing
+    })
   })
 })
 
@@ -210,7 +216,11 @@ Cypress.Commands.add('assertMemoryGrowth', (maxGrowthMB = 50) => {
 
 // Command to simulate user interaction for autoplay activation
 Cypress.Commands.add('activateAutoplay', () => {
-  return cy.get('body').click({ force: true }).then(() => {
-    return cy.wait(1000) // Wait for interaction to register
+  return cy.window().then((win) => {
+    // Use programmatic activation instead of DOM clicks
+    if (win.registerUserInteraction) {
+      win.registerUserInteraction('cypress_autoplay_activation')
+    }
+    return cy.wait(500)
   })
 })
