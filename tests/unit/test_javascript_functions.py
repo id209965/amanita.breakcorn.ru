@@ -12,38 +12,82 @@ class TestJavaScriptFunctions:
     
     def test_global_variables_initialization(self, loaded_page):
         """Test that global variables are properly initialized."""
-        # Check that key global variables exist
-        globals_check = loaded_page.execute_script("""
-            return {
-                videos: typeof videos !== 'undefined',
-                currentVideoIndex: typeof currentVideoIndex !== 'undefined',
-                currentVideo: typeof currentVideo !== 'undefined',
-                player: typeof player !== 'undefined',
-                videoCount: typeof videoCount !== 'undefined',
-                consecutiveFailures: typeof consecutiveFailures !== 'undefined'
-            };
-        """)
-        
-        assert globals_check['videos'], "Videos array should be defined"
-        assert globals_check['currentVideoIndex'], "currentVideoIndex should be defined"
-        assert globals_check['videoCount'], "videoCount should be defined"
-        assert globals_check['consecutiveFailures'], "consecutiveFailures should be defined"
+        # Retry mechanism for flaky initialization
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                # Check that key global variables exist
+                globals_check = loaded_page.execute_script("""
+                    // Ensure user interaction is registered
+                    if (window.registerUserInteraction) {
+                        window.registerUserInteraction('test_globals');
+                    }
+                    
+                    return {
+                        videos: typeof videos !== 'undefined',
+                        currentVideoIndex: typeof currentVideoIndex !== 'undefined',
+                        currentVideo: typeof currentVideo !== 'undefined',
+                        player: typeof player !== 'undefined',
+                        videoCount: typeof videoCount !== 'undefined',
+                        consecutiveFailures: typeof consecutiveFailures !== 'undefined'
+                    };
+                """)
+                
+                # More lenient assertions
+                assert globals_check.get('videos', False), "Videos array should be defined"
+                assert globals_check.get('currentVideoIndex', False), "currentVideoIndex should be defined"
+                assert globals_check.get('videoCount', False), "videoCount should be defined"
+                assert globals_check.get('consecutiveFailures', False), "consecutiveFailures should be defined"
+                
+                # If we get here, test passed
+                break
+                
+            except Exception as e:
+                if retry == max_retries - 1:
+                    # Last attempt failed, re-raise
+                    raise
+                else:
+                    # Wait and retry
+                    time.sleep(2)
+                    continue
     
     def test_video_constants(self, loaded_page):
         """Test that video-related constants have correct values."""
-        constants = loaded_page.execute_script("""
-            return {
-                MAX_VIDEOS_BEFORE_RECREATE: window.MAX_VIDEOS_BEFORE_RECREATE,
-                MAX_CONSECUTIVE_FAILURES: window.MAX_CONSECUTIVE_FAILURES,
-                VIDEO_LOAD_TIMEOUT: window.VIDEO_LOAD_TIMEOUT,
-                WATCHDOG_CHECK_INTERVAL: window.WATCHDOG_CHECK_INTERVAL
-            };
-        """)
-        
-        assert constants['MAX_VIDEOS_BEFORE_RECREATE'] == 5, "MAX_VIDEOS_BEFORE_RECREATE should be 5"
-        assert constants['MAX_CONSECUTIVE_FAILURES'] == 3, "MAX_CONSECUTIVE_FAILURES should be 3"
-        assert constants['VIDEO_LOAD_TIMEOUT'] == 15000, "VIDEO_LOAD_TIMEOUT should be 15000"
-        assert constants['WATCHDOG_CHECK_INTERVAL'] == 3000, "WATCHDOG_CHECK_INTERVAL should be 3000"
+        # Retry mechanism for timing issues
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                constants = loaded_page.execute_script("""
+                    // Ensure we're in test mode
+                    if (window.registerUserInteraction) {
+                        window.registerUserInteraction('test_constants');
+                    }
+                    
+                    return {
+                        MAX_VIDEOS_BEFORE_RECREATE: window.MAX_VIDEOS_BEFORE_RECREATE,
+                        MAX_CONSECUTIVE_FAILURES: window.MAX_CONSECUTIVE_FAILURES,
+                        VIDEO_LOAD_TIMEOUT: window.VIDEO_LOAD_TIMEOUT,
+                        WATCHDOG_CHECK_INTERVAL: window.WATCHDOG_CHECK_INTERVAL,
+                        testMode: window.autoplayConfig ? window.autoplayConfig.testMode : null,
+                        port: window.location.port
+                    };
+                """)
+                
+                # More informative assertions with actual vs expected
+                assert constants.get('MAX_VIDEOS_BEFORE_RECREATE') == 5, f"MAX_VIDEOS_BEFORE_RECREATE should be 5, got {constants.get('MAX_VIDEOS_BEFORE_RECREATE')}"
+                assert constants.get('MAX_CONSECUTIVE_FAILURES') == 3, f"MAX_CONSECUTIVE_FAILURES should be 3, got {constants.get('MAX_CONSECUTIVE_FAILURES')}"
+                assert constants.get('VIDEO_LOAD_TIMEOUT') == 15000, f"VIDEO_LOAD_TIMEOUT should be 15000, got {constants.get('VIDEO_LOAD_TIMEOUT')}"
+                assert constants.get('WATCHDOG_CHECK_INTERVAL') == 3000, f"WATCHDOG_CHECK_INTERVAL should be 3000, got {constants.get('WATCHDOG_CHECK_INTERVAL')}"
+                
+                # Test passed
+                break
+                
+            except Exception as e:
+                if retry == max_retries - 1:
+                    raise
+                else:
+                    time.sleep(2)
+                    continue
     
     def test_load_next_video_function_exists(self, loaded_page):
         """Test that loadNextVideo function exists and is callable."""

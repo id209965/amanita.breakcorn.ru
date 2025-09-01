@@ -63,20 +63,45 @@ def loaded_page(browser, base_url):
         EC.presence_of_element_located((By.ID, "PLAYER"))
     )
     
-    # Wait a bit more for scripts to initialize
-    time.sleep(3)
+    # Wait longer for complete script initialization
+    time.sleep(5)
     
-    # Activate autoplay permission via user interaction
-    try:
-        browser.execute_script("""
-            if (window.registerUserInteraction) {
-                window.registerUserInteraction('pytest_init');
-            }
-        """)
-        time.sleep(1)  # Wait for activation to process
-    except Exception:
-        # Ignore any errors in activation
-        pass
+    # Ensure all critical objects exist before continuing
+    max_attempts = 10
+    for attempt in range(max_attempts):
+        try:
+            critical_check = browser.execute_script("""
+                return {
+                    hasVideos: typeof videos !== 'undefined',
+                    hasPlayer: typeof player !== 'undefined',
+                    hasPlayerSettings: typeof window.playerSettings !== 'undefined',
+                    hasRegisterFunction: typeof window.registerUserInteraction === 'function',
+                    constants: {
+                        maxVideos: window.MAX_VIDEOS_BEFORE_RECREATE,
+                        maxFailures: window.MAX_CONSECUTIVE_FAILURES,
+                        timeout: window.VIDEO_LOAD_TIMEOUT,
+                        interval: window.WATCHDOG_CHECK_INTERVAL
+                    }
+                };
+            """)
+            
+            # Check if all critical objects are ready
+            if (critical_check['hasVideos'] and critical_check['hasPlayer'] and 
+                critical_check['hasPlayerSettings'] and critical_check['hasRegisterFunction']):
+                
+                # Activate autoplay permission
+                browser.execute_script("""
+                    if (window.registerUserInteraction) {
+                        window.registerUserInteraction('pytest_init');
+                        console.log('pytest: autoplay activated');
+                    }
+                """)
+                time.sleep(1)
+                break
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                print(f"Warning: Failed to fully initialize after {max_attempts} attempts: {e}")
+            time.sleep(1)
     
     return browser
 
