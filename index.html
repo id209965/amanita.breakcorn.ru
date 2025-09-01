@@ -701,6 +701,7 @@ function createPlayer() {
     }
     
     console.log('Creating new Plyr player...');
+    const originalId = container.id;
     const newPlayer = new Plyr(container, { 
       autoplay: playerSettings.autoplayAllowed === true, // Используем настройки пользователя
       controls: ['play', 'progress', 'mute', 'volume', 'fullscreen'],
@@ -709,6 +710,11 @@ function createPlayer() {
     
     if (newPlayer) {
       console.log('Plyr player created successfully');
+      // Сохраняем оригинальный ID для тестов
+      if (originalId && newPlayer.elements && newPlayer.elements.container) {
+        newPlayer.elements.container.id = originalId;
+        console.log(`Restored original ID: ${originalId}`);
+      }
     }
     
     return newPlayer;
