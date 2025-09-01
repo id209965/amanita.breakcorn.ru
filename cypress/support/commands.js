@@ -44,7 +44,10 @@ Cypress.Commands.add('monitorMemoryGrowth', (durationMs = 10000) => {
 
 // Video player commands
 Cypress.Commands.add('waitForVideoLoad', (timeout = 30000) => {
-  // Ultra-simple video loading - just wait and continue
+  // Simulate user interaction to trigger autoplay permission
+  cy.get('body').click({ force: true })
+  
+  // Wait for autoplay activation and video loading
   cy.wait(5000) // Give time for things to load
   return cy.window().then((win) => {
     return win.player || {} // Return something
@@ -171,6 +174,10 @@ Cypress.Commands.add('waitForJavaScript', () => {
   return cy.window().should((win) => {
     expect(win).to.exist
     // Very basic check - just ensure window exists
+  }).then(() => {
+    // Simulate user interaction to enable autoplay
+    cy.get('body').click({ force: true })
+    cy.wait(1000) // Wait for interaction to register
   })
 })
 
@@ -198,5 +205,12 @@ Cypress.Commands.add('assertMemoryGrowth', (maxGrowthMB = 50) => {
       cy.log(`Memory growth: ${growthMB}MB (limit: ${maxGrowthMB}MB)`)
       return true // Always pass
     })
+  })
+})
+
+// Command to simulate user interaction for autoplay activation
+Cypress.Commands.add('activateAutoplay', () => {
+  return cy.get('body').click({ force: true }).then(() => {
+    return cy.wait(1000) // Wait for interaction to register
   })
 })

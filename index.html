@@ -1965,11 +1965,16 @@ function initializePlayer() {
   if (player) {
     setupPlayerEvents();
     syncWindowVariables(); // Обновляем глобальные ссылки
-    // Загружаем случайное видео только если автовоспроизведение уже настроено
-    if (playerSettings.autoplayAllowed !== null && videos.length > 0) {
+    // Загружаем первоначальное видео всегда (без автозапуска если не разрешено)
+    if (videos.length > 0) {
       setTimeout(() => {
-        console.log('Loading initial random video after player setup');
-        currentIndex = getNextVideoIndex(); // Выбираем случайное видео
+        if (playerSettings.autoplayAllowed !== null) {
+          console.log('Loading initial random video with autoplay after player setup');
+          currentIndex = getNextVideoIndex(); // Выбираем случайное видео
+        } else {
+          console.log('Loading initial video without autoplay - waiting for user interaction');
+          currentIndex = getNextVideoIndex(); // Выбираем случайное видео
+        }
         setVideoSource(videos[currentIndex]);
       }, 100);
     }
